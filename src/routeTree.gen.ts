@@ -10,33 +10,309 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AlertasRouteImport } from './routes/alertas'
+import { Route as AutomacaoRouteImport } from './routes/automacao'
+import { Route as BenchmarkingRouteImport } from './routes/benchmarking'
+import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as ComercialRouteImport } from './routes/comercial'
+import { Route as ComunicacaoRouteImport } from './routes/comunicacao'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ConhecimentoRouteImport } from './routes/conhecimento'
+import { Route as DocumentosRouteImport } from './routes/documentos'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
+import { Route as InteligenciaRouteImport } from './routes/inteligencia'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PessoasRouteImport } from './routes/pessoas'
+import { Route as PortalRouteImport } from './routes/portal'
+import { Route as ProcessosRouteImport } from './routes/processos'
+import { Route as ProjetosRouteImport } from './routes/projetos'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as RentabilidadeRouteImport } from './routes/rentabilidade'
+import { Route as SimuladorRouteImport } from './routes/simulador'
+import { Route as TarefasRouteImport } from './routes/tarefas'
+import { Route as ClientesClientIdRouteImport } from './routes/clientes.$clientId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AlertasRoute = AlertasRouteImport.update({
+  id: '/alertas',
+  path: '/alertas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutomacaoRoute = AutomacaoRouteImport.update({
+  id: '/automacao',
+  path: '/automacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BenchmarkingRoute = BenchmarkingRouteImport.update({
+  id: '/benchmarking',
+  path: '/benchmarking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesRoute = ClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComercialRoute = ComercialRouteImport.update({
+  id: '/comercial',
+  path: '/comercial',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComunicacaoRoute = ComunicacaoRouteImport.update({
+  id: '/comunicacao',
+  path: '/comunicacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConhecimentoRoute = ConhecimentoRouteImport.update({
+  id: '/conhecimento',
+  path: '/conhecimento',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentosRoute = DocumentosRouteImport.update({
+  id: '/documentos',
+  path: '/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InteligenciaRoute = InteligenciaRouteImport.update({
+  id: '/inteligencia',
+  path: '/inteligencia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PessoasRoute = PessoasRouteImport.update({
+  id: '/pessoas',
+  path: '/pessoas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalRoute = PortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProcessosRoute = ProcessosRouteImport.update({
+  id: '/processos',
+  path: '/processos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjetosRoute = ProjetosRouteImport.update({
+  id: '/projetos',
+  path: '/projetos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RentabilidadeRoute = RentabilidadeRouteImport.update({
+  id: '/rentabilidade',
+  path: '/rentabilidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SimuladorRoute = SimuladorRouteImport.update({
+  id: '/simulador',
+  path: '/simulador',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TarefasRoute = TarefasRouteImport.update({
+  id: '/tarefas',
+  path: '/tarefas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesClientIdRoute = ClientesClientIdRouteImport.update({
+  id: '/$clientId',
+  path: '/$clientId',
+  getParentRoute: () => ClientesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/alertas': typeof AlertasRoute
+  '/automacao': typeof AutomacaoRoute
+  '/benchmarking': typeof BenchmarkingRoute
+  '/clientes': typeof ClientesRouteWithChildren
+  '/comercial': typeof ComercialRoute
+  '/comunicacao': typeof ComunicacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/conhecimento': typeof ConhecimentoRoute
+  '/documentos': typeof DocumentosRoute
+  '/financeiro': typeof FinanceiroRoute
+  '/inteligencia': typeof InteligenciaRoute
+  '/onboarding': typeof OnboardingRoute
+  '/pessoas': typeof PessoasRoute
+  '/portal': typeof PortalRoute
+  '/processos': typeof ProcessosRoute
+  '/projetos': typeof ProjetosRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/rentabilidade': typeof RentabilidadeRoute
+  '/simulador': typeof SimuladorRoute
+  '/tarefas': typeof TarefasRoute
+  '/clientes/$clientId': typeof ClientesClientIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/alertas': typeof AlertasRoute
+  '/automacao': typeof AutomacaoRoute
+  '/benchmarking': typeof BenchmarkingRoute
+  '/clientes': typeof ClientesRouteWithChildren
+  '/comercial': typeof ComercialRoute
+  '/comunicacao': typeof ComunicacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/conhecimento': typeof ConhecimentoRoute
+  '/documentos': typeof DocumentosRoute
+  '/financeiro': typeof FinanceiroRoute
+  '/inteligencia': typeof InteligenciaRoute
+  '/onboarding': typeof OnboardingRoute
+  '/pessoas': typeof PessoasRoute
+  '/portal': typeof PortalRoute
+  '/processos': typeof ProcessosRoute
+  '/projetos': typeof ProjetosRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/rentabilidade': typeof RentabilidadeRoute
+  '/simulador': typeof SimuladorRoute
+  '/tarefas': typeof TarefasRoute
+  '/clientes/$clientId': typeof ClientesClientIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/alertas': typeof AlertasRoute
+  '/automacao': typeof AutomacaoRoute
+  '/benchmarking': typeof BenchmarkingRoute
+  '/clientes': typeof ClientesRouteWithChildren
+  '/comercial': typeof ComercialRoute
+  '/comunicacao': typeof ComunicacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/conhecimento': typeof ConhecimentoRoute
+  '/documentos': typeof DocumentosRoute
+  '/financeiro': typeof FinanceiroRoute
+  '/inteligencia': typeof InteligenciaRoute
+  '/onboarding': typeof OnboardingRoute
+  '/pessoas': typeof PessoasRoute
+  '/portal': typeof PortalRoute
+  '/processos': typeof ProcessosRoute
+  '/projetos': typeof ProjetosRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/rentabilidade': typeof RentabilidadeRoute
+  '/simulador': typeof SimuladorRoute
+  '/tarefas': typeof TarefasRoute
+  '/clientes/$clientId': typeof ClientesClientIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/alertas'
+    | '/automacao'
+    | '/benchmarking'
+    | '/clientes'
+    | '/comercial'
+    | '/comunicacao'
+    | '/configuracoes'
+    | '/conhecimento'
+    | '/documentos'
+    | '/financeiro'
+    | '/inteligencia'
+    | '/onboarding'
+    | '/pessoas'
+    | '/portal'
+    | '/processos'
+    | '/projetos'
+    | '/relatorios'
+    | '/rentabilidade'
+    | '/simulador'
+    | '/tarefas'
+    | '/clientes/$clientId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/alertas'
+    | '/automacao'
+    | '/benchmarking'
+    | '/clientes'
+    | '/comercial'
+    | '/comunicacao'
+    | '/configuracoes'
+    | '/conhecimento'
+    | '/documentos'
+    | '/financeiro'
+    | '/inteligencia'
+    | '/onboarding'
+    | '/pessoas'
+    | '/portal'
+    | '/processos'
+    | '/projetos'
+    | '/relatorios'
+    | '/rentabilidade'
+    | '/simulador'
+    | '/tarefas'
+    | '/clientes/$clientId'
+  id:
+    | '__root__'
+    | '/'
+    | '/alertas'
+    | '/automacao'
+    | '/benchmarking'
+    | '/clientes'
+    | '/comercial'
+    | '/comunicacao'
+    | '/configuracoes'
+    | '/conhecimento'
+    | '/documentos'
+    | '/financeiro'
+    | '/inteligencia'
+    | '/onboarding'
+    | '/pessoas'
+    | '/portal'
+    | '/processos'
+    | '/projetos'
+    | '/relatorios'
+    | '/rentabilidade'
+    | '/simulador'
+    | '/tarefas'
+    | '/clientes/$clientId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlertasRoute: typeof AlertasRoute
+  AutomacaoRoute: typeof AutomacaoRoute
+  BenchmarkingRoute: typeof BenchmarkingRoute
+  ClientesRoute: typeof ClientesRouteWithChildren
+  ComercialRoute: typeof ComercialRoute
+  ComunicacaoRoute: typeof ComunicacaoRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ConhecimentoRoute: typeof ConhecimentoRoute
+  DocumentosRoute: typeof DocumentosRoute
+  FinanceiroRoute: typeof FinanceiroRoute
+  InteligenciaRoute: typeof InteligenciaRoute
+  OnboardingRoute: typeof OnboardingRoute
+  PessoasRoute: typeof PessoasRoute
+  PortalRoute: typeof PortalRoute
+  ProcessosRoute: typeof ProcessosRoute
+  ProjetosRoute: typeof ProjetosRoute
+  RelatoriosRoute: typeof RelatoriosRoute
+  RentabilidadeRoute: typeof RentabilidadeRoute
+  SimuladorRoute: typeof SimuladorRoute
+  TarefasRoute: typeof TarefasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +324,190 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/alertas': {
+      id: '/alertas'
+      path: '/alertas'
+      fullPath: '/alertas'
+      preLoaderRoute: typeof AlertasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/automacao': {
+      id: '/automacao'
+      path: '/automacao'
+      fullPath: '/automacao'
+      preLoaderRoute: typeof AutomacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/benchmarking': {
+      id: '/benchmarking'
+      path: '/benchmarking'
+      fullPath: '/benchmarking'
+      preLoaderRoute: typeof BenchmarkingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes': {
+      id: '/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof ClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comercial': {
+      id: '/comercial'
+      path: '/comercial'
+      fullPath: '/comercial'
+      preLoaderRoute: typeof ComercialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comunicacao': {
+      id: '/comunicacao'
+      path: '/comunicacao'
+      fullPath: '/comunicacao'
+      preLoaderRoute: typeof ComunicacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conhecimento': {
+      id: '/conhecimento'
+      path: '/conhecimento'
+      fullPath: '/conhecimento'
+      preLoaderRoute: typeof ConhecimentoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documentos': {
+      id: '/documentos'
+      path: '/documentos'
+      fullPath: '/documentos'
+      preLoaderRoute: typeof DocumentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inteligencia': {
+      id: '/inteligencia'
+      path: '/inteligencia'
+      fullPath: '/inteligencia'
+      preLoaderRoute: typeof InteligenciaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pessoas': {
+      id: '/pessoas'
+      path: '/pessoas'
+      fullPath: '/pessoas'
+      preLoaderRoute: typeof PessoasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal': {
+      id: '/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof PortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/processos': {
+      id: '/processos'
+      path: '/processos'
+      fullPath: '/processos'
+      preLoaderRoute: typeof ProcessosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projetos': {
+      id: '/projetos'
+      path: '/projetos'
+      fullPath: '/projetos'
+      preLoaderRoute: typeof ProjetosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rentabilidade': {
+      id: '/rentabilidade'
+      path: '/rentabilidade'
+      fullPath: '/rentabilidade'
+      preLoaderRoute: typeof RentabilidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/simulador': {
+      id: '/simulador'
+      path: '/simulador'
+      fullPath: '/simulador'
+      preLoaderRoute: typeof SimuladorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tarefas': {
+      id: '/tarefas'
+      path: '/tarefas'
+      fullPath: '/tarefas'
+      preLoaderRoute: typeof TarefasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes/$clientId': {
+      id: '/clientes/$clientId'
+      path: '/$clientId'
+      fullPath: '/clientes/$clientId'
+      preLoaderRoute: typeof ClientesClientIdRouteImport
+      parentRoute: typeof ClientesRoute
+    }
   }
 }
 
+interface ClientesRouteChildren {
+  ClientesClientIdRoute: typeof ClientesClientIdRoute
+}
+
+const ClientesRouteChildren: ClientesRouteChildren = {
+  ClientesClientIdRoute: ClientesClientIdRoute,
+}
+
+const ClientesRouteWithChildren = ClientesRoute._addFileChildren(
+  ClientesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlertasRoute: AlertasRoute,
+  AutomacaoRoute: AutomacaoRoute,
+  BenchmarkingRoute: BenchmarkingRoute,
+  ClientesRoute: ClientesRouteWithChildren,
+  ComercialRoute: ComercialRoute,
+  ComunicacaoRoute: ComunicacaoRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  ConhecimentoRoute: ConhecimentoRoute,
+  DocumentosRoute: DocumentosRoute,
+  FinanceiroRoute: FinanceiroRoute,
+  InteligenciaRoute: InteligenciaRoute,
+  OnboardingRoute: OnboardingRoute,
+  PessoasRoute: PessoasRoute,
+  PortalRoute: PortalRoute,
+  ProcessosRoute: ProcessosRoute,
+  ProjetosRoute: ProjetosRoute,
+  RelatoriosRoute: RelatoriosRoute,
+  RentabilidadeRoute: RentabilidadeRoute,
+  SimuladorRoute: SimuladorRoute,
+  TarefasRoute: TarefasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
