@@ -70,23 +70,31 @@ export type ObligationInsightInput = {
 const DEFAULT_NOW = new Date("2026-09-14T12:00:00");
 const DUE_SOON_DAYS = 5;
 
+const TODAY = "2026-09-14";
+
 export function computeObligationInsights({ obligations, clients, now }: ObligationInsightInput): Insight[] {
   const reference = now ?? DEFAULT_NOW;
   const insights: Insight[] = [];
-  const nameOf = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? clientId;
+  const clientOf = (clientId: string) => clients.find((c) => c.id === clientId);
 
   const overdue = obligations.filter((o) => o.status === "Atrasada");
-  if (overdue.length > 0) {
-    const names = overdue.map((o) => `${nameOf(o.clientId)} (${o.type})`);
+  for (const o of overdue) {
+    const client = clientOf(o.clientId);
     insights.push({
-      id: "obligation-overdue",
+      id: `obligation-overdue-${o.id}`,
       kind: "Problema",
-      title: `${overdue.length} obrigação(ões) com prazo vencido`,
-      impact: `${names.slice(0, 4).join(", ")}${names.length > 4 ? "…" : ""}.`,
-      cause: "Obrigações sem conclusão até a data de vencimento.",
-      recommendation: "Priorizar a apuração e envio das obrigações atrasadas hoje.",
+      severity: o.priority === "Crítica" ? "Crítica" : "Alta",
+      title: `${client?.name ?? o.clientId}: ${o.type} está atrasada (competência ${o.competence})`,
+      clientId: o.clientId,
+      department: o.department,
+      assignee: o.assignee,
+      evidence: [`Vencimento em ${o.dueDate}, ainda sem conclusão.`, `Checklist: ${o.checklist.filter((c) => c.done).length}/${o.checklist.length} concluído.`],
+      impact: "Obrigação sem conclusão até a data de vencimento — risco de multa ou penalidade.",
+      recommendation: "Priorizar a apuração e envio desta obrigação hoje.",
       link: "/obrigacoes",
       actions: ["Ver obrigações", "Gerar pendência"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 
@@ -96,17 +104,24 @@ export function computeObligationInsights({ obligations, clients, now }: Obligat
     const diffDays = (due.getTime() - reference.getTime()) / (1000 * 60 * 60 * 24);
     return diffDays >= 0 && diffDays <= DUE_SOON_DAYS;
   });
-  if (dueSoon.length > 0) {
-    const names = dueSoon.map((o) => `${nameOf(o.clientId)} (${o.type}, vence ${o.dueDate})`);
+  for (const o of dueSoon) {
+    const client = clientOf(o.clientId);
+    const diffDays = Math.round((new Date(`${o.dueDate}T23:59:59`).getTime() - reference.getTime()) / (1000 * 60 * 60 * 24));
     insights.push({
-      id: "obligation-due-soon",
+      id: `obligation-due-soon-${o.id}`,
       kind: "Previsão",
-      title: `${dueSoon.length} obrigação(ões) vencem nos próximos ${DUE_SOON_DAYS} dias`,
-      impact: `${names.slice(0, 4).join(", ")}${names.length > 4 ? "…" : ""}.`,
-      cause: "Prazo se aproximando sem conclusão registrada.",
-      recommendation: "Confirmar checklist e responsável de cada obrigação antes do vencimento.",
+      severity: diffDays <= 2 ? "Alta" : "Média",
+      title: `${client?.name ?? o.clientId}: ${o.type} vence em ${diffDays} dia(s)`,
+      clientId: o.clientId,
+      department: o.department,
+      assignee: o.assignee,
+      evidence: [`Vence em ${o.dueDate} · status atual: ${o.status}.`, `Checklist: ${o.checklist.filter((c) => c.done).length}/${o.checklist.length} concluído.`],
+      impact: "Prazo se aproximando sem conclusão registrada.",
+      recommendation: "Confirmar checklist e responsável desta obrigação antes do vencimento.",
       link: "/obrigacoes",
       actions: ["Ver calendário", "Ver obrigações"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 

@@ -43,7 +43,7 @@ export type ChurnRiskResult = {
 
 export type HealthScoreClient = Pick<
   Client,
-  "id" | "name" | "nps" | "overdue" | "fee" | "complaints30d" | "lateTasks" | "services" | "since"
+  "id" | "name" | "nps" | "overdue" | "fee" | "complaints30d" | "lateTasks" | "services" | "since" | "department" | "owner"
 >;
 
 export type HealthScoreInput = {
@@ -240,12 +240,17 @@ export function computeChurnInsights(churnRisks: ChurnRiskResult[], healthScores
       return {
         id: `churn-${c.clientId}`,
         kind: "Previsão" as const,
+        severity: c.level === "Crítico" ? ("Crítica" as const) : ("Alta" as const),
         title: `${client?.name ?? c.clientId}: risco de churn ${c.level.toLowerCase()}`,
+        clientId: c.clientId,
+        ...(client ? { department: client.department, assignee: client.owner } : {}),
+        evidence: c.signals.length > 0 ? c.signals : ["Sem sinais negativos relevantes."],
         impact: c.explanation,
-        cause: c.signals.join(", ") || "Sem sinais negativos relevantes.",
         recommendation: health?.recommendation ?? "Agendar contato de relacionamento.",
         link: "/clientes/" + c.clientId,
         actions: ["Ver cliente", "Criar tarefa", "Preparar contato", "Ver histórico", "Marcar como analisado"],
+        createdAt: "2026-09-14",
+        status: "Aberto" as const,
       };
     });
 }

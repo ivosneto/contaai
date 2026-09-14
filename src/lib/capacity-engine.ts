@@ -119,11 +119,22 @@ export function classifyOccupancy(occupancy: number): CapacityStatus {
   return "Abaixo da capacidade";
 }
 
+/**
+ * `baselineTasks` é a distribuição original (semente) de tarefas — serve só
+ * para medir o quanto `tasks` (o estado atual/ao vivo) se desviou dela.
+ * `e.allocated` continua sendo a base de ocupação total (inclui trabalho
+ * recorrente que não está modelado como `Task`); redistribuir uma tarefa
+ * ajusta essa base pelo delta real de horas, em vez de substituí-la — assim,
+ * no estado inicial (tasks === baselineTasks) o resultado é idêntico ao de
+ * antes, e após uma redistribuição a ocupação de quem perdeu/ganhou a tarefa
+ * muda de verdade.
+ */
 export function computeEmployeeCapacity(
   employees: CapacityEmployee[],
   tasks: CapacityTask[],
   timeEntries: CapacityTimeEntry[],
   projects: CapacityProject[],
+  baselineTasks: CapacityTask[] = tasks,
 ): EmployeeCapacity[] {
   return employees.map((e, i) => {
     const availableHours = Math.round(e.capacity * (1 - overheadRate(i)));
@@ -133,7 +144,10 @@ export function computeEmployeeCapacity(
     const lateTasks = employeeTasks.filter((t) => t.late && t.status !== "Concluída").length;
     const employeeClientIds = new Set(employeeTasks.map((t) => t.clientId));
     const activeProjects = projects.filter((p) => employeeClientIds.has(p.clientId) && p.status !== "Concluído").length;
-    const occupancy = availableHours > 0 ? Math.round((e.allocated / availableHours) * 100) : 0;
+    const currentTaskHours = employeeTasks.filter((t) => t.status !== "Concluída").reduce((s, t) => s + t.hours, 0);
+    const baselineTaskHours = baselineTasks.filter((t) => t.assignee === e.name && t.status !== "Concluída").reduce((s, t) => s + t.hours, 0);
+    const allocatedHours = Math.max(0, e.allocated + (currentTaskHours - baselineTaskHours));
+    const occupancy = availableHours > 0 ? Math.round((allocatedHours / availableHours) * 100) : 0;
     return {
       employeeId: e.id,
       name: e.name,
@@ -141,7 +155,7 @@ export function computeEmployeeCapacity(
       department: e.department,
       monthlyCapacity: e.capacity,
       availableHours,
-      allocatedHours: e.allocated,
+      allocatedHours,
       consumedHours,
       occupancy,
       status: classifyOccupancy(occupancy),
@@ -344,6 +358,8 @@ export function computeCapacityRecommendations(
   return recs;
 }
 
+const TODAY = "2026-09-14";
+
 export function computeCapacityInsights(
   employeeCapacities: EmployeeCapacity[],
   departmentCapacities: DepartmentCapacity[],
@@ -357,12 +373,17 @@ export function computeCapacityInsights(
     insights.push({
       id: `capacity-emp-${e.employeeId}`,
       kind: "Problema",
+      severity: e.occupancy >= 130 ? "Crítica" : "Alta",
       title: `${e.name} está com ${e.occupancy}% da capacidade`,
-      impact: `${e.allocatedHours}h alocadas de ${e.availableHours}h disponíveis no ${e.department}${e.lateTasks > 0 ? ` · ${e.lateTasks} tarefa(s) atrasada(s)` : ""}.`,
-      cause: `Volume de tarefas do ${e.department} cresceu acima da capacidade disponível de ${e.name}.`,
+      department: e.department,
+      assignee: e.name,
+      evidence: [`${e.allocatedHours}h alocadas de ${e.availableHours}h disponíveis no ${e.department}${e.lateTasks > 0 ? ` · ${e.lateTasks} tarefa(s) atrasada(s)` : ""}.`],
+      impact: `Volume de tarefas do ${e.department} cresceu acima da capacidade disponível de ${e.name}.`,
       recommendation: `Redistribuir tarefas de ${e.name} para colegas com folga ou avaliar terceirização.`,
       link: "/pessoas",
       actions,
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 
@@ -371,23 +392,31 @@ export function computeCapacityInsights(
       insights.push({
         id: `capacity-dept-${d.department}`,
         kind: "Problema",
+        severity: d.occupancy >= 115 ? "Crítica" : "Alta",
         title: `Departamento ${d.department} está a ${d.occupancy}% de ocupação`,
-        impact: `${d.allocated}h alocadas para ${d.available}h disponíveis entre ${d.headcount} pessoas${d.processesAtRisk > 0 ? ` · ${d.processesAtRisk} processo(s) em risco de SLA` : ""}.`,
-        cause: "Entrada de demanda sem redistribuição ou reforço de equipe.",
+        department: d.department,
+        evidence: [`${d.allocated}h alocadas para ${d.available}h disponíveis entre ${d.headcount} pessoas${d.processesAtRisk > 0 ? ` · ${d.processesAtRisk} processo(s) em risco de SLA` : ""}.`],
+        impact: "Entrada de demanda sem redistribuição ou reforço de equipe.",
         recommendation: d.availableCount > 0 ? "Redistribuir tarefas para colaboradores com capacidade ociosa." : "Avaliar terceirização ou contratação para este departamento.",
         link: "/pessoas",
         actions,
+        createdAt: TODAY,
+        status: "Aberto",
       });
     } else if (d.occupancy > 0 && d.occupancy < 70) {
       insights.push({
         id: `capacity-idle-${d.department}`,
         kind: "Oportunidade",
+        severity: "Média",
         title: `Capacidade ociosa no ${d.department}`,
-        impact: `${d.available - d.allocated}h disponíveis por mês entre ${d.headcount} pessoas.`,
-        cause: "Departamento com capacidade acima da demanda atual.",
+        department: d.department,
+        evidence: [`${d.available - d.allocated}h disponíveis por mês entre ${d.headcount} pessoas.`],
+        impact: "Departamento com capacidade acima da demanda atual.",
         recommendation: "Avaliar novos clientes para este departamento ou redistribuir tarefas de departamentos sobrecarregados.",
         link: "/pessoas",
         actions: ["Planejar", "Ver capacidade"],
+        createdAt: TODAY,
+        status: "Aberto",
       });
     }
   }
@@ -396,12 +425,15 @@ export function computeCapacityInsights(
     insights.push({
       id: "capacity-forecast-overall",
       kind: "Previsão",
+      severity: "Alta",
       title: "Risco de atraso na próxima semana",
-      impact: forecast.overall.message,
-      cause: "Demanda de tarefas com vencimento nos próximos 7 dias excede a capacidade disponível da equipe.",
+      evidence: [forecast.overall.message],
+      impact: "Demanda de tarefas com vencimento nos próximos 7 dias excede a capacidade disponível da equipe.",
       recommendation: "Priorizar tarefas críticas e redistribuir ou terceirizar o excedente antes do vencimento.",
       link: "/pessoas",
       actions: ["Ver previsão", "Redistribuir tarefas"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
   for (const f of forecast.byDepartment) {
@@ -409,12 +441,16 @@ export function computeCapacityInsights(
     insights.push({
       id: `capacity-forecast-${f.department}`,
       kind: "Previsão",
+      severity: "Alta",
       title: `${f.department}: risco de atraso na próxima semana`,
-      impact: f.message,
-      cause: `Demanda de tarefas do ${f.department} com vencimento nos próximos 7 dias excede a capacidade disponível.`,
+      department: f.department,
+      evidence: [f.message],
+      impact: `Demanda de tarefas do ${f.department} com vencimento nos próximos 7 dias excede a capacidade disponível.`,
       recommendation: "Redistribuir tarefas para outros departamentos com folga ou priorizar as mais críticas.",
       link: "/pessoas",
       actions: ["Ver previsão", "Redistribuir tarefas"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 

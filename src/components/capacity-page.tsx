@@ -4,7 +4,7 @@ import { Calculator, ChevronRight, TrendingDown, Users } from "lucide-react";
 import { Badge, Glass, Kpi, PageHeader, StatusDot } from "@/components/accounting-os";
 import { Button } from "@/components/ui/button";
 import { useOfficeStore } from "@/data/store";
-import { employees, processes, projects, timeEntries } from "@/data/office";
+import { employees, processes, projects, tasks as seedTasks, timeEntries } from "@/data/office";
 import {
   buildDepartmentCapacity,
   buildOfficeCapacityOverview,
@@ -35,7 +35,7 @@ export function CapacityPage() {
   const { tasks, reassignTask, reprioritizeTask, logCapacityDecision, capacityLog, confirmAction } = useOfficeStore();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const employeeCapacity = useMemo(() => computeEmployeeCapacity(employees, tasks, timeEntries, projects), [tasks]);
+  const employeeCapacity = useMemo(() => computeEmployeeCapacity(employees, tasks, timeEntries, projects, seedTasks), [tasks]);
   const departmentCapacity = useMemo(() => buildDepartmentCapacity(employeeCapacity, processes), [employeeCapacity]);
   const overview = useMemo(() => buildOfficeCapacityOverview(employeeCapacity, departmentCapacity), [employeeCapacity, departmentCapacity]);
   const forecast = useMemo(() => computeCapacityForecast(employeeCapacity, departmentCapacity, tasks), [employeeCapacity, departmentCapacity, tasks]);
@@ -70,7 +70,7 @@ export function CapacityPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Capacity Planning"
+        eyebrow="Planejamento de Capacidade"
         title="Pessoas & Capacidade"
         description="Ocupação real por colaborador e departamento, previsão de demanda e recomendações de redistribuição — toda alteração exige aprovação."
         action={<Button asChild><Link to="/simulador"><Calculator /> Simular cenário</Link></Button>}

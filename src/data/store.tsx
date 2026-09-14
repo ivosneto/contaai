@@ -19,18 +19,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  automations as seedAutomations,
   clientById,
   communications as seedCommunications,
   documents as seedDocuments,
+  employees,
   obligations as seedObligations,
   pendencies as seedPendencies,
+  processes,
+  projects,
   tasks as seedTasks,
+  timeEntries,
   type ClientDocument,
   type Communication,
   type CommunicationClassification,
   type CommunicationStatus,
   type Department,
   type DocumentType,
+  type Insight,
   type Obligation,
   type ObligationPriority,
   type ObligationType,
@@ -43,6 +49,8 @@ import {
 import { OBLIGATION_DEPARTMENT, buildChecklist } from "@/lib/obligations-engine";
 import { runDocumentPipeline } from "@/lib/documents-engine";
 import { classifyContent, summarize } from "@/lib/communication-engine";
+import { buildDepartmentCapacity, computeCapacityRecommendations, computeEmployeeCapacity } from "@/lib/capacity-engine";
+import type { Automation, AutomationMatch, AutomationRun } from "@/lib/automation-engine";
 
 /**
  * Estado compartilhado em memória (por sessão do navegador) para as entidades
@@ -67,11 +75,21 @@ type StoreState = {
   communications: Communication[];
   documents: ClientDocument[];
   obligations: Obligation[];
+  automations: Automation[];
   insightStatus: Record<string, EntryStatus>;
   alertStatus: Record<string, EntryStatus>;
   churnReviewed: Record<string, string>; // clientId -> data em que foi marcado como analisado
   activityLog: TimelineEvent[];
   capacityLog: CapacityLogEntry[]; // decisões de capacidade sem cliente associado (terceirização, contratação)
+  /**
+   * Insights gerados em tempo real pelo fluxo operacional (ex.: sobrecarga
+   * detectada ao processar um documento) — somados aos insights estáticos de
+   * `office.ts` no Dashboard e na Central de Inteligência. Diferente de
+   * `insightStatus` (que só marca status sobre insights já calculados),
+   * estes nascem e morrem no store: aparecem quando o gatilho acontece e
+   * somem quando o gestor resolve.
+   */
+  liveInsights: Insight[];
 };
 
 const departmentToCategory: Record<Department, PendencyCategory> = {
@@ -136,6 +154,8 @@ export type NewDocumentInput = {
   assignee: string;
 };
 
+export type NewAutomationInput = Pick<Automation, "name" | "trigger" | "conditions" | "actions">;
+
 type Action =
   | { type: "CREATE_PENDENCY"; input: NewPendencyInput }
   | { type: "UPDATE_PENDENCY"; id: string; patch: Partial<Pick<Pendency, "status" | "priority" | "dueDate" | "assignee">> }
@@ -150,6 +170,7 @@ type Action =
   | { type: "MARK_CHURN_REVIEWED"; clientId: string }
   | { type: "REASSIGN_TASK"; taskId: string; assignee: string }
   | { type: "REPRIORITIZE_TASK"; taskId: string; priority: PendencyPriority }
+  | { type: "COMPLETE_TASK"; taskId: string }
   | { type: "LOG_CAPACITY_DECISION"; kind: string; title: string; detail: string }
   | { type: "CREATE_OBLIGATION"; input: NewObligationInput }
   | { type: "UPDATE_OBLIGATION"; id: string; patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">> }
@@ -160,36 +181,310 @@ type Action =
   | { type: "ASSIGN_MESSAGE"; id: string; assignee: string }
   | { type: "UPDATE_MESSAGE_STATUS"; id: string; status: CommunicationStatus }
   | { type: "SEND_REPLY"; messageId: string; content: string }
-  | { type: "CREATE_CLIENT_MESSAGE"; clientId: string; content: string };
+  | { type: "CREATE_CLIENT_MESSAGE"; clientId: string; content: string }
+  | { type: "TOGGLE_AUTOMATION_STATUS"; id: string }
+  | { type: "RUN_AUTOMATION"; automationId: string; matches: AutomationMatch[] }
+  | { type: "CREATE_AUTOMATION"; input: NewAutomationInput }
+  | { type: "REDISTRIBUTE_FROM_INSIGHT"; insightId: string }
+  | { type: "DISMISS_LIVE_INSIGHT"; id: string };
 
 function logFor(clientId: string, type: TimelineEvent["type"], title: string, detail: string): TimelineEvent {
   return { id: genId("log"), clientId, date: today(), type, title, detail };
 }
 
+/**
+ * Helpers puros que aplicam uma mutação a um StoreState e devolvem o novo
+ * estado. Compartilhados entre as ações "manuais" (botões da UI) e o motor
+ * de automação (RUN_AUTOMATION), para que rodar uma automação faça
+ * exatamente a mesma coisa que o usuário faria clicando manualmente — sem
+ * duplicar regra de negócio em dois lugares.
+ */
+
+function applyCreatePendency(state: StoreState, input: NewPendencyInput): StoreState {
+  const p: Pendency = {
+    id: genId("pd"),
+    clientId: input.clientId,
+    category: input.category,
+    title: input.title,
+    description: input.description,
+    origin: "Manual",
+    assignee: input.assignee,
+    priority: input.priority,
+    slaHours: 24,
+    dueDate: input.dueDate,
+    status: "Aberta",
+    createdAt: today(),
+    recommendedAction: "Acompanhar até a conclusão.",
+  };
+  return {
+    ...state,
+    pendencies: [p, ...state.pendencies],
+    activityLog: [logFor(p.clientId, "pendência", "Pendência criada", p.title), ...state.activityLog],
+  };
+}
+
+function applyCreateTaskForClient(state: StoreState, clientId: string, title: string): StoreState {
+  const client = clientById(clientId);
+  const t: Task = {
+    id: genId("t"),
+    title,
+    clientId,
+    assignee: client?.owner ?? "Equipe",
+    department: client?.department ?? "Contábil",
+    due: today(),
+    status: "A fazer",
+    priority: "Alta",
+    late: false,
+    hours: 2,
+  };
+  return {
+    ...state,
+    tasks: [t, ...state.tasks],
+    activityLog: [logFor(clientId, "tarefa", "Tarefa criada", t.title), ...state.activityLog],
+  };
+}
+
+function applyCreateCommercialRecommendation(state: StoreState, clientId: string, title: string, description: string): StoreState {
+  const client = clientById(clientId);
+  const p: Pendency = {
+    id: genId("pd"),
+    clientId,
+    category: "Comercial",
+    title,
+    description,
+    origin: "Motor de Rentabilidade",
+    assignee: client?.owner ?? "Equipe Comercial",
+    priority: "Alta",
+    slaHours: 48,
+    dueDate: today(),
+    status: "Aberta",
+    createdAt: today(),
+    recommendedAction: description,
+  };
+  return {
+    ...state,
+    pendencies: [p, ...state.pendencies],
+    activityLog: [logFor(clientId, "pendência", "Recomendação comercial gerada", p.title), ...state.activityLog],
+  };
+}
+
+function applyProcessDocument(state: StoreState, documentId: string): StoreState {
+  const doc = state.documents.find((d) => d.id === documentId);
+  if (!doc || doc.pipelineStage === "Concluído") return state;
+  const client = clientById(doc.clientId);
+  if (!client) return state;
+
+  const result = runDocumentPipeline({ type: doc.type, category: doc.category, competence: doc.competence }, client, state.obligations, hashIndex(doc.id));
+
+  const events: TimelineEvent[] = [
+    logFor(doc.clientId, "documento", "Documento identificado e classificado", `${doc.type} · categoria ${doc.category} · competência ${doc.competence}.`),
+    logFor(
+      doc.clientId,
+      "documento",
+      "Dados extraídos (OCR simulado)",
+      `CNPJ ${result.extraction.cnpj} · nº ${result.extraction.numero}${result.extraction.valor ? ` · R$ ${result.extraction.valor}` : ""}.`,
+    ),
+  ];
+
+  let pendencies = state.pendencies;
+  let obligations = state.obligations;
+  let liveInsights = state.liveInsights;
+  let linkedPendencyId: string | null = null;
+
+  if (result.validation.issues.length > 0) {
+    events.push(logFor(doc.clientId, "documento", "Validação encontrou problemas", result.validation.issues.join(" ")));
+    const pd: Pendency = {
+      id: genId("pd"),
+      clientId: doc.clientId,
+      category: doc.category,
+      title: `Revisar documento — ${doc.name}`,
+      description: result.validation.issues.join(" "),
+      origin: "Documento",
+      assignee: doc.assignee,
+      priority: "Alta",
+      slaHours: 24,
+      dueDate: today(),
+      status: "Aberta",
+      createdAt: today(),
+      recommendedAction: "Revisar documento e confirmar dados manualmente.",
+    };
+    pendencies = [pd, ...pendencies];
+    linkedPendencyId = pd.id;
+    events.push(logFor(doc.clientId, "pendência", "Pendência gerada a partir de documento", pd.title));
+  } else {
+    const matched = result.matchedObligation;
+    events.push(
+      logFor(
+        doc.clientId,
+        "documento",
+        "Documento validado, relacionado ao cliente e à obrigação",
+        matched ? `Obrigação correspondente: ${matched.type} (${matched.competence}).` : "Nenhuma obrigação correspondente encontrada para este documento.",
+      ),
+    );
+    if (matched) {
+      obligations = obligations.map((o) => (o.id === matched.id ? { ...o, evidenceDocumentId: doc.id } : o));
+      events.push(logFor(doc.clientId, "documento", "Processamento concluído", `Evidência anexada à obrigação ${matched.type}.`));
+
+      // "Sistema verifica que ainda existem outros documentos pendentes" — outras
+      // obrigações do mesmo cliente/competência (o mesmo fechamento) ainda abertas.
+      const stillPending = obligations.filter(
+        (o) => o.clientId === doc.clientId && o.competence === matched.competence && o.id !== matched.id && o.status !== "Concluída",
+      );
+
+      if (stillPending.length > 0) {
+        const earliest = [...stillPending].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+        events.push(
+          logFor(
+            doc.clientId,
+            "documento",
+            "Fechamento do mês ainda incompleto",
+            `Ainda há ${stillPending.length} obrigação(ões) pendente(s) na competência ${matched.competence}: ${stillPending.map((o) => o.type).join(", ")}.`,
+          ),
+        );
+
+        if (earliest) {
+          const closingId = `pd-closing-${doc.clientId}-${matched.competence}`;
+          linkedPendencyId = closingId;
+          const alreadyTracked = pendencies.some((p) => p.id === closingId && p.status !== "Concluída" && p.status !== "Cancelada");
+
+          if (!alreadyTracked) {
+            const closingPendency: Pendency = {
+              id: closingId,
+              clientId: doc.clientId,
+              category: "Documento",
+              title: `Fechamento ${matched.competence} — documentos pendentes (${client.name})`,
+              description: `Ainda faltam ${stillPending.length} obrigação(ões) para concluir o fechamento: ${stillPending.map((o) => o.type).join(", ")}.`,
+              origin: "Documento",
+              assignee: earliest.assignee,
+              priority: stillPending.length >= 2 ? "Alta" : "Média",
+              slaHours: 48,
+              dueDate: earliest.dueDate,
+              status: "Aberta",
+              createdAt: today(),
+              recommendedAction: "Cobrar o cliente pelos documentos restantes e acompanhar o checklist das obrigações.",
+            };
+            pendencies = [closingPendency, ...pendencies];
+            // "Responsável é identificado" + "Prazo é calculado"
+            events.push(logFor(doc.clientId, "pendência", "Pendência de fechamento criada", `Responsável: ${earliest.assignee}. Prazo: ${earliest.dueDate}.`));
+          } else {
+            events.push(logFor(doc.clientId, "pendência", "Pendência de fechamento já em acompanhamento", `Responsável: ${earliest.assignee}.`));
+          }
+
+          // "Capacidade do responsável é analisada"
+          const liveCapacity = computeEmployeeCapacity(employees, state.tasks, timeEntries, projects, seedTasks);
+          const responsible = liveCapacity.find((e) => e.name === earliest.assignee);
+          if (responsible) {
+            events.push(
+              logFor(
+                doc.clientId,
+                "tarefa",
+                "Capacidade do responsável analisada",
+                `${responsible.name}: ${responsible.occupancy}% de ocupação (${responsible.allocatedHours}h de ${responsible.availableHours}h disponíveis).`,
+              ),
+            );
+
+            // "Sistema percebe que ele está sobrecarregado" → "Gera insight"
+            if (responsible.status === "Sobrecarregado" && !liveInsights.some((i) => i.assignee === responsible.name && i.id.startsWith("live-capacity-"))) {
+              const insight: Insight = {
+                id: `live-capacity-${responsible.employeeId}-${genId("i")}`,
+                kind: "Problema",
+                title: `${responsible.name} está sobrecarregado(a) (${responsible.occupancy}%) e agora também responde pelo fechamento de ${client.name}`,
+                severity: responsible.occupancy >= 130 ? "Crítica" : "Alta",
+                clientId: doc.clientId,
+                department: earliest.department,
+                assignee: responsible.name,
+                evidence: [
+                  `${responsible.allocatedHours}h alocadas de ${responsible.availableHours}h disponíveis (${responsible.occupancy}%).`,
+                  `Novo item: fechamento de ${client.name} (competência ${matched.competence}), vencimento ${earliest.dueDate}.`,
+                ],
+                impact: "Sobrecarga pode atrasar este e outros fechamentos sob responsabilidade desta pessoa.",
+                recommendation: `Redistribuir tarefas de ${responsible.name} para um colega do ${responsible.department} com capacidade disponível.`,
+                actions: ["Redistribuir", "Ver capacidade"],
+                link: "/pessoas",
+                createdAt: today(),
+                status: "Aberto",
+              };
+              liveInsights = [insight, ...liveInsights];
+              events.push(logFor(doc.clientId, "tarefa", "Insight gerado: sobrecarga detectada", insight.title));
+            }
+          }
+        }
+      }
+    } else {
+      events.push(logFor(doc.clientId, "documento", "Processamento concluído", "Documento aprovado sem obrigação vinculada."));
+    }
+  }
+
+  const finalDoc: ClientDocument = {
+    ...doc,
+    pipelineStage: "Concluído",
+    status: result.validation.status,
+    extraction: result.extraction,
+    linkedObligationId: result.matchedObligation?.id ?? null,
+    linkedPendencyId,
+  };
+
+  return {
+    ...state,
+    documents: state.documents.map((d) => (d.id === doc.id ? finalDoc : d)),
+    obligations,
+    pendencies,
+    liveInsights,
+    activityLog: [...events.reverse(), ...state.activityLog],
+  };
+}
+
+/**
+ * "Gestor aprova redistribuição → Tarefa é redistribuída → ContaAI mede
+ * resultado": fecha o loop do insight de sobrecarga gerado acima. Reusa o
+ * mesmo motor de capacidade/recomendação da página /pessoas (não duplica
+ * regra), redistribui de verdade (reassignTask) e registra o resultado
+ * medido (ocupação antes → depois) na timeline do cliente do insight.
+ */
+function applyRedistributeFromInsight(state: StoreState, insightId: string): StoreState {
+  const insight = state.liveInsights.find((i) => i.id === insightId);
+  if (!insight || !insight.assignee) return state;
+
+  const liveCapacity = computeEmployeeCapacity(employees, state.tasks, timeEntries, projects, seedTasks);
+  const departmentCapacity = buildDepartmentCapacity(liveCapacity, processes);
+  const recommendation = computeCapacityRecommendations(liveCapacity, departmentCapacity, state.tasks).find(
+    (r) => r.employeeName === insight.assignee && r.kind === "redistribuicao" && r.taskId && r.targetEmployeeName,
+  );
+
+  const before = liveCapacity.find((e) => e.name === insight.assignee);
+  const clientId = insight.clientId ?? state.tasks.find((t) => t.assignee === insight.assignee)?.clientId ?? "";
+
+  if (!recommendation || !recommendation.taskId || !recommendation.targetEmployeeName) {
+    return {
+      ...state,
+      liveInsights: state.liveInsights.filter((i) => i.id !== insightId),
+      activityLog: clientId
+        ? [logFor(clientId, "tarefa", "Redistribuição não encontrou colega disponível", `Nenhum colaborador com folga suficiente para aliviar ${insight.assignee} agora.`), ...state.activityLog]
+        : state.activityLog,
+    };
+  }
+
+  const nextTasks = state.tasks.map((t) => (t.id === recommendation.taskId ? { ...t, assignee: recommendation.targetEmployeeName! } : t));
+  const afterCapacity = computeEmployeeCapacity(employees, nextTasks, timeEntries, projects, seedTasks);
+  const after = afterCapacity.find((e) => e.name === insight.assignee);
+
+  const measured =
+    before && after
+      ? `Ocupação de ${insight.assignee} caiu de ${before.occupancy}% para ${after.occupancy}% após mover "${recommendation.taskTitle ?? "a tarefa"}" para ${recommendation.targetEmployeeName}.`
+      : `Tarefa redistribuída de ${insight.assignee} para ${recommendation.targetEmployeeName}.`;
+
+  return {
+    ...state,
+    tasks: nextTasks,
+    liveInsights: state.liveInsights.filter((i) => i.id !== insightId),
+    activityLog: clientId ? [logFor(clientId, "tarefa", "Redistribuição aprovada e medida", measured), ...state.activityLog] : state.activityLog,
+  };
+}
+
 function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
-    case "CREATE_PENDENCY": {
-      const p: Pendency = {
-        id: genId("pd"),
-        clientId: action.input.clientId,
-        category: action.input.category,
-        title: action.input.title,
-        description: action.input.description,
-        origin: "Manual",
-        assignee: action.input.assignee,
-        priority: action.input.priority,
-        slaHours: 24,
-        dueDate: action.input.dueDate,
-        status: "Aberta",
-        createdAt: today(),
-        recommendedAction: "Acompanhar até a conclusão.",
-      };
-      return {
-        ...state,
-        pendencies: [p, ...state.pendencies],
-        activityLog: [logFor(p.clientId, "pendência", "Pendência criada", p.title), ...state.activityLog],
-      };
-    }
+    case "CREATE_PENDENCY":
+      return applyCreatePendency(state, action.input);
     case "UPDATE_PENDENCY": {
       return {
         ...state,
@@ -258,49 +553,10 @@ function reducer(state: StoreState, action: Action): StoreState {
         activityLog: [logFor(p.clientId, "mensagem", "Comunicação gerada a partir de pendência", p.title), ...state.activityLog],
       };
     }
-    case "CREATE_TASK_FOR_CLIENT": {
-      const client = clientById(action.clientId);
-      const t: Task = {
-        id: genId("t"),
-        title: action.title,
-        clientId: action.clientId,
-        assignee: client?.owner ?? "Equipe",
-        department: client?.department ?? "Contábil",
-        due: today(),
-        status: "A fazer",
-        priority: "Alta",
-        late: false,
-        hours: 2,
-      };
-      return {
-        ...state,
-        tasks: [t, ...state.tasks],
-        activityLog: [logFor(action.clientId, "tarefa", "Tarefa criada", t.title), ...state.activityLog],
-      };
-    }
-    case "CREATE_COMMERCIAL_RECOMMENDATION": {
-      const client = clientById(action.clientId);
-      const p: Pendency = {
-        id: genId("pd"),
-        clientId: action.clientId,
-        category: "Comercial",
-        title: action.title,
-        description: action.description,
-        origin: "Motor de Rentabilidade",
-        assignee: client?.owner ?? "Equipe Comercial",
-        priority: "Alta",
-        slaHours: 48,
-        dueDate: today(),
-        status: "Aberta",
-        createdAt: today(),
-        recommendedAction: action.description,
-      };
-      return {
-        ...state,
-        pendencies: [p, ...state.pendencies],
-        activityLog: [logFor(action.clientId, "pendência", "Recomendação comercial gerada", p.title), ...state.activityLog],
-      };
-    }
+    case "CREATE_TASK_FOR_CLIENT":
+      return applyCreateTaskForClient(state, action.clientId, action.title);
+    case "CREATE_COMMERCIAL_RECOMMENDATION":
+      return applyCreateCommercialRecommendation(state, action.clientId, action.title, action.description);
     case "RESOLVE_INSIGHT":
       return { ...state, insightStatus: { ...state.insightStatus, [action.id]: "resolvido" } };
     case "IGNORE_INSIGHT":
@@ -329,6 +585,15 @@ function reducer(state: StoreState, action: Action): StoreState {
         ...state,
         tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, priority: action.priority } : t)),
         activityLog: [logFor(target.clientId, "tarefa", "Prioridade da tarefa alterada", `"${target.title}" agora é prioridade ${action.priority}.`), ...state.activityLog],
+      };
+    }
+    case "COMPLETE_TASK": {
+      const target = state.tasks.find((t) => t.id === action.taskId);
+      if (!target || target.status === "Concluída") return state;
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, status: "Concluída" as const, late: false } : t)),
+        activityLog: [logFor(target.clientId, "tarefa", "Tarefa concluída", `"${target.title}" marcada como concluída.`), ...state.activityLog],
       };
     }
     case "LOG_CAPACITY_DECISION": {
@@ -422,83 +687,8 @@ function reducer(state: StoreState, action: Action): StoreState {
         activityLog: [logFor(doc.clientId, "documento", "Documento recebido", doc.name), ...state.activityLog],
       };
     }
-    case "PROCESS_DOCUMENT": {
-      const doc = state.documents.find((d) => d.id === action.documentId);
-      if (!doc || doc.pipelineStage === "Concluído") return state;
-      const client = clientById(doc.clientId);
-      if (!client) return state;
-
-      const result = runDocumentPipeline({ type: doc.type, category: doc.category, competence: doc.competence }, client, state.obligations, hashIndex(doc.id));
-
-      const events: TimelineEvent[] = [
-        logFor(doc.clientId, "documento", "Documento identificado e classificado", `${doc.type} · categoria ${doc.category} · competência ${doc.competence}.`),
-        logFor(
-          doc.clientId,
-          "documento",
-          "Dados extraídos (OCR simulado)",
-          `CNPJ ${result.extraction.cnpj} · nº ${result.extraction.numero}${result.extraction.valor ? ` · R$ ${result.extraction.valor}` : ""}.`,
-        ),
-      ];
-
-      let pendencies = state.pendencies;
-      let obligations = state.obligations;
-      let linkedPendencyId: string | null = null;
-
-      if (result.validation.issues.length > 0) {
-        events.push(logFor(doc.clientId, "documento", "Validação encontrou problemas", result.validation.issues.join(" ")));
-        const pd: Pendency = {
-          id: genId("pd"),
-          clientId: doc.clientId,
-          category: doc.category,
-          title: `Revisar documento — ${doc.name}`,
-          description: result.validation.issues.join(" "),
-          origin: "Documento",
-          assignee: doc.assignee,
-          priority: "Alta",
-          slaHours: 24,
-          dueDate: today(),
-          status: "Aberta",
-          createdAt: today(),
-          recommendedAction: "Revisar documento e confirmar dados manualmente.",
-        };
-        pendencies = [pd, ...pendencies];
-        linkedPendencyId = pd.id;
-        events.push(logFor(doc.clientId, "pendência", "Pendência gerada a partir de documento", pd.title));
-      } else {
-        const matched = result.matchedObligation;
-        events.push(
-          logFor(
-            doc.clientId,
-            "documento",
-            "Documento validado, relacionado ao cliente e à obrigação",
-            matched ? `Obrigação correspondente: ${matched.type} (${matched.competence}).` : "Nenhuma obrigação correspondente encontrada para este documento.",
-          ),
-        );
-        if (matched) {
-          obligations = obligations.map((o) => (o.id === matched.id ? { ...o, evidenceDocumentId: doc.id } : o));
-          events.push(logFor(doc.clientId, "documento", "Processamento concluído", `Evidência anexada à obrigação ${matched.type}.`));
-        } else {
-          events.push(logFor(doc.clientId, "documento", "Processamento concluído", "Documento aprovado sem obrigação vinculada."));
-        }
-      }
-
-      const finalDoc: ClientDocument = {
-        ...doc,
-        pipelineStage: "Concluído",
-        status: result.validation.status,
-        extraction: result.extraction,
-        linkedObligationId: result.matchedObligation?.id ?? null,
-        linkedPendencyId,
-      };
-
-      return {
-        ...state,
-        documents: state.documents.map((d) => (d.id === doc.id ? finalDoc : d)),
-        obligations,
-        pendencies,
-        activityLog: [...events.reverse(), ...state.activityLog],
-      };
-    }
+    case "PROCESS_DOCUMENT":
+      return applyProcessDocument(state, action.documentId);
     case "ASSIGN_MESSAGE": {
       const target = state.communications.find((m) => m.id === action.id);
       if (!target) return state;
@@ -575,6 +765,68 @@ function reducer(state: StoreState, action: Action): StoreState {
         activityLog: [logFor(action.clientId, "mensagem", "Mensagem recebida pelo portal do cliente", subject), ...state.activityLog],
       };
     }
+    case "TOGGLE_AUTOMATION_STATUS": {
+      return {
+        ...state,
+        automations: state.automations.map((a) => (a.id === action.id ? { ...a, status: a.status === "Ativa" ? ("Pausada" as const) : ("Ativa" as const) } : a)),
+      };
+    }
+    case "RUN_AUTOMATION": {
+      const automation = state.automations.find((a) => a.id === action.automationId);
+      if (!automation) return state;
+      const actionType = automation.actions[0];
+      let next = state;
+      for (const match of action.matches) {
+        if (actionType === "atualizar-obrigacao") {
+          next = applyProcessDocument(next, match.id);
+        } else if (actionType === "criar-alerta") {
+          const task = next.tasks.find((t) => t.id === match.id);
+          next = applyCreatePendency(next, {
+            clientId: match.clientId,
+            category: "Interna",
+            title: `Alerta: ${task?.title ?? match.label}`,
+            description: match.label,
+            assignee: task?.assignee ?? clientById(match.clientId)?.owner ?? "Equipe",
+            priority: "Alta",
+            dueDate: task?.due ?? today(),
+          });
+        } else if (actionType === "criar-tarefa-responsavel") {
+          const client = clientById(match.clientId);
+          next = applyCreateTaskForClient(next, match.clientId, `Investigar risco de churn — ${client?.name ?? match.clientId}`);
+        } else if (actionType === "criar-oportunidade-comercial") {
+          const client = clientById(match.clientId);
+          next = applyCreateCommercialRecommendation(next, match.clientId, `Propor reajuste — ${client?.name ?? match.clientId}`, match.label);
+        }
+      }
+      const run: AutomationRun = {
+        id: genId("run"),
+        at: today(),
+        matchedCount: action.matches.length,
+        executedCount: action.matches.length,
+        summary: action.matches.length > 0 ? `${action.matches.length} correspondência(s) processada(s).` : "Nenhuma correspondência no momento da execução.",
+      };
+      return {
+        ...next,
+        automations: next.automations.map((a) => (a.id === automation.id ? { ...a, lastRunAt: today(), history: [run, ...a.history] } : a)),
+      };
+    }
+    case "CREATE_AUTOMATION": {
+      const automation: Automation = {
+        id: genId("auto"),
+        name: action.input.name,
+        trigger: action.input.trigger,
+        conditions: action.input.conditions,
+        actions: action.input.actions,
+        status: "Ativa",
+        lastRunAt: null,
+        history: [],
+      };
+      return { ...state, automations: [automation, ...state.automations] };
+    }
+    case "REDISTRIBUTE_FROM_INSIGHT":
+      return applyRedistributeFromInsight(state, action.insightId);
+    case "DISMISS_LIVE_INSIGHT":
+      return { ...state, liveInsights: state.liveInsights.filter((i) => i.id !== action.id) };
     default:
       return state;
   }
@@ -587,11 +839,13 @@ function initialState(): StoreState {
     communications: seedCommunications,
     documents: seedDocuments,
     obligations: seedObligations,
+    automations: seedAutomations,
     insightStatus: {},
     alertStatus: {},
     churnReviewed: {},
     activityLog: [],
     capacityLog: [],
+    liveInsights: [],
   };
 }
 
@@ -618,6 +872,7 @@ type OfficeStoreValue = StoreState & {
   markChurnReviewed: (clientId: string) => void;
   reassignTask: (taskId: string, assignee: string) => void;
   reprioritizeTask: (taskId: string, priority: PendencyPriority) => void;
+  completeTask: (taskId: string) => void;
   logCapacityDecision: (kind: string, title: string, detail: string) => void;
   createObligation: (input: NewObligationInput) => void;
   updateObligation: (id: string, patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">>) => void;
@@ -629,6 +884,11 @@ type OfficeStoreValue = StoreState & {
   updateMessageStatus: (id: string, status: CommunicationStatus) => void;
   sendReply: (messageId: string, content: string) => void;
   createClientMessage: (clientId: string, content: string) => void;
+  toggleAutomationStatus: (id: string) => void;
+  runAutomation: (automationId: string, matches: AutomationMatch[]) => void;
+  createAutomation: (input: NewAutomationInput) => void;
+  redistributeFromInsight: (insightId: string) => void;
+  dismissLiveInsight: (id: string) => void;
   confirmAction: (options: ConfirmOptions) => void;
 };
 
@@ -670,6 +930,7 @@ export function OfficeStoreProvider({ children }: { children: ReactNode }) {
       markChurnReviewed: (clientId) => dispatch({ type: "MARK_CHURN_REVIEWED", clientId }),
       reassignTask: (taskId, assignee) => dispatch({ type: "REASSIGN_TASK", taskId, assignee }),
       reprioritizeTask: (taskId, priority) => dispatch({ type: "REPRIORITIZE_TASK", taskId, priority }),
+      completeTask: (taskId) => dispatch({ type: "COMPLETE_TASK", taskId }),
       logCapacityDecision: (kind, title, detail) => dispatch({ type: "LOG_CAPACITY_DECISION", kind, title, detail }),
       createObligation: (input) => dispatch({ type: "CREATE_OBLIGATION", input }),
       updateObligation: (id, patch) => dispatch({ type: "UPDATE_OBLIGATION", id, patch }),
@@ -681,6 +942,11 @@ export function OfficeStoreProvider({ children }: { children: ReactNode }) {
       updateMessageStatus: (id, status) => dispatch({ type: "UPDATE_MESSAGE_STATUS", id, status }),
       sendReply: (messageId, content) => dispatch({ type: "SEND_REPLY", messageId, content }),
       createClientMessage: (clientId, content) => dispatch({ type: "CREATE_CLIENT_MESSAGE", clientId, content }),
+      toggleAutomationStatus: (id) => dispatch({ type: "TOGGLE_AUTOMATION_STATUS", id }),
+      runAutomation: (automationId, matches) => dispatch({ type: "RUN_AUTOMATION", automationId, matches }),
+      createAutomation: (input) => dispatch({ type: "CREATE_AUTOMATION", input }),
+      redistributeFromInsight: (insightId) => dispatch({ type: "REDISTRIBUTE_FROM_INSIGHT", insightId }),
+      dismissLiveInsight: (id) => dispatch({ type: "DISMISS_LIVE_INSIGHT", id }),
       confirmAction,
     }),
     [state, confirmAction],

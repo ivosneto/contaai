@@ -13,6 +13,26 @@ import {
 import { buildChecklist, computeObligationInsights, OBLIGATION_DEPARTMENT } from "@/lib/obligations-engine";
 import { DOCUMENT_DEFAULT_CATEGORY, runDocumentPipeline } from "@/lib/documents-engine";
 import { classifyContent, computeCommunicationInsights, summarize } from "@/lib/communication-engine";
+import {
+  classifyMrrMovements,
+  computeAccountsPaid,
+  computeAccountsReceivable,
+  computeFinancialInsights,
+  computeMrrWaterfall,
+  computeRevenuePerClient,
+  computeTicketMedio,
+} from "@/lib/financial-engine";
+import { computeBenchmarking } from "@/lib/benchmarking-engine";
+import { buildSimulationBaseline } from "@/lib/simulator-engine";
+import {
+  evaluateAutomation,
+  type Automation,
+  type AutomationActionType,
+  type AutomationCondition,
+  type AutomationRun,
+  type AutomationStatus,
+  type AutomationTrigger,
+} from "@/lib/automation-engine";
 
 export type Department =
   | "Fiscal"
@@ -55,6 +75,7 @@ export type Client = {
   headcountLastPeriod: number; // funcionários há 6 meses
   services: ServiceName[];
   fee: number; // honorário mensal
+  feeLastPeriod: number; // honorário no mês anterior — base do motor financeiro (MRR: novo/expansão/contração/churn)
   cost: number; // custo mensal de atendimento
   owner: string;
   department: Department;
@@ -176,15 +197,31 @@ export type Alert = {
   actions: string[];
 };
 
+export type InsightSeverity = "Crítica" | "Alta" | "Média" | "Baixa";
+export type InsightStatus = "Aberto" | "Resolvido" | "Ignorado";
+
+/**
+ * Central de Inteligência — todo insight é derivado dos dados calculados
+ * pelos motores (rentabilidade, health score, capacidade, obrigações,
+ * revenue intelligence, comunicação, inteligência geral), nunca texto
+ * solto. `status` nasce "Aberto"; a UI sobrepõe o status vindo do store
+ * (resolvido/ignorado) quando o usuário age sobre o insight.
+ */
 export type Insight = {
   id: string;
   kind: "Problema" | "Oportunidade" | "Previsão";
   title: string;
+  severity: InsightSeverity;
+  clientId?: string;
+  department?: Department;
+  assignee?: string;
+  evidence: string[];
   impact: string;
-  cause: string;
   recommendation: string;
-  link: string;
   actions: string[];
+  link: string;
+  createdAt: string;
+  status: InsightStatus;
 };
 
 export type AppRole = "owner" | "admin" | "manager" | "employee" | "client";
@@ -441,6 +478,15 @@ export type Communication = {
   suggestedAction: string;
 };
 
+/** Comunicado do escritório para os clientes — conteúdo autoral (não derivado de dados), como um mural de avisos. Visível no Portal do Cliente. */
+export type Announcement = {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+  audience: "Todos os clientes" | Department;
+};
+
 export type FinancialAccount = {
   id: string;
   name: string;
@@ -600,6 +646,8 @@ export const clients: Client[] = names.map((name, i) => {
   const complexity = 2 + seeded(i, 8);
   const complexityLastPeriod = Math.max(1, complexity - at([0, 0, 1, 2, 3], seeded(i, 9)));
   const feeLastAdjustedAt = shiftDate("2026-09-14", -(30 + seeded(i, 540)));
+  const feeDrift = at([0, 0, 0, 0.1, 0.18, -0.08, -0.15, 0.25], seeded(i, 19));
+  const feeLastPeriod = feeDrift === 0 ? fee : Math.max(300, Math.round(fee / (1 + feeDrift)));
 
   return {
     id: `c${i + 1}`,
@@ -613,6 +661,7 @@ export const clients: Client[] = names.map((name, i) => {
     headcountLastPeriod,
     services,
     fee,
+    feeLastPeriod,
     cost,
     owner: at(owners, i),
     department: at(["Fiscal", "Contábil", "Pessoal", "Societário"] as const, seeded(i, 4)),
@@ -854,6 +903,37 @@ export const knowledgeArticles = [
   },
 ];
 
+export const announcements: Announcement[] = [
+  {
+    id: "an1",
+    title: "Prazo da DAS de setembro",
+    body: "A guia do DAS de setembro vence no dia 20/09. Envie os documentos pendentes até o dia 17 para garantirmos a apuração em tempo.",
+    publishedAt: "2026-09-10",
+    audience: "Todos os clientes",
+  },
+  {
+    id: "an2",
+    title: "Novo canal de atendimento pelo Portal",
+    body: "Agora você pode enviar documentos e mensagens direto pelo Portal do Cliente, sem precisar de e-mail ou WhatsApp. O prazo de resposta é o mesmo dos outros canais.",
+    publishedAt: "2026-09-05",
+    audience: "Todos os clientes",
+  },
+  {
+    id: "an3",
+    title: "Atualização no eSocial para a Folha",
+    body: "O eSocial passou a exigir confirmação de admissões e desligamentos até o 5º dia útil do mês seguinte. Fique atento às solicitações de confirmação enviadas pelo nosso time.",
+    publishedAt: "2026-09-02",
+    audience: "Pessoal",
+  },
+  {
+    id: "an4",
+    title: "Horário de atendimento no feriado",
+    body: "No feriado de 7 de setembro não haverá atendimento. Retornamos normalmente no dia 8, com prioridade para prazos que vencerem no período.",
+    publishedAt: "2026-08-28",
+    audience: "Todos os clientes",
+  },
+];
+
 export const agents = [
   {
     id: "ag1",
@@ -905,56 +985,9 @@ export const agents = [
   },
 ];
 
-export const automations = [
-  {
-    id: "w1",
-    name: "Cobrança de documentos",
-    when: "Cliente não envia documento",
-    rules: [
-      { if: "Prazo < 2 dias", then: "Enviar lembrete automático" },
-      { if: "Prazo vencido", then: "Criar alerta para o responsável" },
-      { if: "3 dias de atraso", then: "Escalar para o gestor" },
-    ],
-    active: true,
-    runs: 148,
-  },
-  {
-    id: "w2",
-    name: "Régua de inadimplência",
-    when: "Honorário vence sem pagamento",
-    rules: [
-      { if: "1 dia de atraso", then: "Mensagem amigável ao financeiro" },
-      { if: "7 dias", then: "Notificar responsável pela conta" },
-      { if: "15 dias", then: "Abrir ocorrência e sugerir negociação" },
-    ],
-    active: true,
-    runs: 63,
-  },
-  {
-    id: "w3",
-    name: "Alerta de Health Score",
-    when: "Health Score cai mais de 10 pontos",
-    rules: [
-      { if: "Queda > 10 pts", then: "Criar tarefa de relacionamento" },
-      { if: "Queda > 20 pts", then: "Notificar sócio" },
-    ],
-    active: true,
-    runs: 21,
-  },
-  {
-    id: "w4",
-    name: "Distribuição por capacidade",
-    when: "Departamento ultrapassa 100% de ocupação",
-    rules: [
-      { if: "Existe capacidade ociosa", then: "Sugerir redistribuição" },
-      { if: "Aprovado pelo gestor", then: "Realocar tarefas" },
-    ],
-    active: false,
-    runs: 0,
-  },
-];
-
-export type Automation = (typeof automations)[number];
+// `automations` é construído mais abaixo, depois de documents/obligations/
+// tasks/revenueOpportunities/churnRisks existirem — ver motor de automação
+// (src/lib/automation-engine.ts).
 
 // ---------- derived metrics ----------
 
@@ -1091,6 +1124,29 @@ export const obligations: Obligation[] = Array.from({ length: 40 }, (_, i) => {
   };
 });
 
+// Garante pelo menos um cenário real de "fechamento com mais de uma
+// obrigação pendente na mesma competência" para o mesmo cliente — o resto
+// do seed acima gera isso só ocasionalmente (por sorteio independente por
+// obrigação). Sem essa garantia, o fluxo documento → obrigação → "ainda há
+// outros documentos pendentes" → pendência → capacidade nunca teria um
+// exemplo real para percorrer de ponta a ponta. Mesmo motor, mesmos dados —
+// só um segundo item real de obrigação para o cliente c3.
+obligations.push({
+  id: "ob41",
+  clientId: "c3",
+  type: "SPED Fiscal",
+  department: OBLIGATION_DEPARTMENT["SPED Fiscal"],
+  competence: "2026-08",
+  dueDate: "2026-09-18",
+  regime: "MEI",
+  municipality: "Belo Horizonte",
+  assignee: "João Ferreira",
+  status: "Pendente",
+  priority: "Média",
+  evidenceDocumentId: null,
+  checklist: buildChecklist("SPED Fiscal", 0),
+});
+
 // ---------- documentos inteligentes ----------
 // "Extração por OCR" é SIMULADA — ver OCR_DEMO_DISCLAIMER em
 // documents-engine.ts. Metade dos documentos do seed já passou pelo
@@ -1106,11 +1162,26 @@ const documentTypes: DocumentType[] = [
   "Relatório gerencial",
 ];
 
+// Reverso de DOCUMENT_TO_OBLIGATION_TYPES (documents-engine.ts) — usado só
+// para gerar o seed de forma coerente (metade dos documentos nasce a partir
+// de uma obrigação real do cliente, então processá-los de fato encontra
+// correspondência em vez de nunca casar com nada).
+const OBLIGATION_TO_DOCUMENT_TYPE: Partial<Record<ObligationType, DocumentType>> = {
+  DAS: "Guia de imposto",
+  DCTFWeb: "Guia de imposto",
+  "SPED Fiscal": "Nota fiscal",
+  "SPED Contribuições": "Nota fiscal",
+  eSocial: "Folha de ponto",
+  GFIP: "Folha de ponto",
+};
+
 export const documents: ClientDocument[] = Array.from({ length: 28 }, (_, i) => {
-  const client = at(clients, i);
-  const type = at(documentTypes, i);
+  const useObligationBasis = i % 2 === 0;
+  const basisObligation = useObligationBasis ? at(obligations, i) : null;
+  const client = basisObligation ? (clientById(basisObligation.clientId) ?? at(clients, i)) : at(clients, i);
+  const type = basisObligation ? (OBLIGATION_TO_DOCUMENT_TYPE[basisObligation.type] ?? at(documentTypes, i)) : at(documentTypes, i);
   const category = DOCUMENT_DEFAULT_CATEGORY[type];
-  const competence = i % 5 === 0 ? "2026-08" : "2026-09";
+  const competence = basisObligation?.competence ?? (i % 5 === 0 ? "2026-08" : "2026-09");
   const uploadedAt = `2026-09-${String(1 + (i % 28)).padStart(2, "0")}`;
   const assignee = at(employees, i % employees.length).name;
   const base = { id: `doc${i + 1}`, clientId: client.id, name: `${type} — ${client.name}`, type, category, competence, assignee, uploadedAt };
@@ -1157,7 +1228,11 @@ const pendencyLibrary: {
 
 export const pendencies: Pendency[] = Array.from({ length: 26 }, (_, i) => {
   const client = at(clients, i);
-  const lib = at(pendencyLibrary, i);
+  // Evita gerar uma pendência de cobrança ("Negociar honorário em atraso")
+  // para um cliente que não tem, de fato, nenhuma fatura vencida — mantém a
+  // pendência coerente com `client.overdue` (usado também no Portal do Cliente).
+  const candidate = at(pendencyLibrary, i);
+  const lib = candidate.category === "Financeiro" && client.overdue === 0 ? at(pendencyLibrary, pendencyLibrary.length - 1) : candidate;
   const dueDate = shiftDate("2026-09-14", seeded(i, 20) - 10);
   const createdAt = shiftDate(dueDate, -(3 + seeded(i, 6)));
   return {
@@ -1282,6 +1357,19 @@ export const payments: Payment[] = invoices
     paidAt: `2026-09-${String(2 + (i % 8)).padStart(2, "0")}`,
     method: at(["Pix", "Boleto", "Cartão"] as const, i),
   }));
+
+// ---------- motor financeiro ----------
+// Contas a receber/pagas, MRR (novo/expansão/contração/churn), receita por
+// cliente e ticket médio — tudo calculado a partir de clients/invoices/
+// payments já existentes. Nenhuma cobrança ou pagamento real é processado.
+// Ver src/lib/financial-engine.ts.
+
+export const accountsReceivable = computeAccountsReceivable(invoices, clients);
+export const accountsPaid = computeAccountsPaid(payments, clients);
+export const mrrMovements = classifyMrrMovements(clients);
+export const mrrWaterfall = computeMrrWaterfall(clients);
+export const revenuePerClient = computeRevenuePerClient(clients);
+export const ticketMedio = computeTicketMedio(clients);
 
 export const transactions: Transaction[] = [
   ...payments.map((p, i) => ({
@@ -1469,6 +1557,67 @@ export const officeCapacityOverview = buildOfficeCapacityOverview(employeeCapaci
 export const capacityForecast = computeCapacityForecast(employeeCapacity, departmentCapacity, tasks);
 export const capacityRecommendations = computeCapacityRecommendations(employeeCapacity, departmentCapacity, tasks);
 
+// ---------- motor de automação ----------
+// Quando → Se → Então. Nenhuma ação externa é executada automaticamente no
+// MVP: `evaluateAutomation` só lê os dados e devolve correspondências reais
+// (dry-run); a execução de verdade exige confirmação humana na UI. O
+// histórico inicial abaixo já nasce de rodar o avaliador contra os dados do
+// seed — não é número inventado. Ver src/lib/automation-engine.ts.
+
+const automationEvalContext = { documents, obligations, tasks, churnRisks, churnReviewed: {}, revenueOpportunities, clients };
+
+function seedAutomation(
+  id: string,
+  name: string,
+  trigger: AutomationTrigger,
+  conditions: AutomationCondition[],
+  actions: AutomationActionType[],
+  status: AutomationStatus,
+): Automation {
+  const base: Automation = { id, name, trigger, conditions, actions, status, lastRunAt: null, history: [] };
+  if (status === "Pausada") return base;
+  const matches = evaluateAutomation(base, automationEvalContext);
+  const run: AutomationRun = {
+    id: `${id}-run1`,
+    at: "2026-09-14",
+    matchedCount: matches.length,
+    executedCount: 0,
+    summary: matches.length > 0 ? `${matches.length} correspondência(s) encontrada(s) na última verificação.` : "Nenhuma correspondência na última verificação.",
+  };
+  return { ...base, lastRunAt: "2026-09-14", history: [run] };
+}
+
+export const automations: Automation[] = [
+  seedAutomation("auto-1", "Atualizar obrigação ao receber documento", "documento-recebido", ["cliente-possui-obrigacao-pendente"], ["atualizar-obrigacao"], "Ativa"),
+  seedAutomation("auto-2", "Alertar tarefas próximas do SLA", "tarefa-proxima-sla", ["nenhuma"], ["criar-alerta"], "Ativa"),
+  seedAutomation("auto-3", "Criar tarefa para risco de churn", "cliente-risco-churn", ["nenhuma"], ["criar-tarefa-responsavel"], "Ativa"),
+  seedAutomation("auto-4", "Gerar oportunidade comercial por honorário defasado", "honorario-abaixo-recomendado", ["nenhuma"], ["criar-oportunidade-comercial"], "Pausada"),
+];
+
+// ---------- benchmarking ----------
+// Compara indicadores reais do escritório (calculados a partir de clients/
+// employees já existentes) contra uma referência de mercado agregada e
+// demonstrativa. Nenhum dado individual de outro escritório é exibido. Ver
+// src/lib/benchmarking-engine.ts.
+
+const churnRatePct = clients.length > 0 ? Math.round((mrrWaterfall.churn.count / clients.length) * 1000) / 10 : 0;
+
+export const benchmarking = computeBenchmarking({
+  totalMrr: totals.mrr,
+  employees,
+  margin,
+  ticketMedio,
+  utilization,
+  churnRatePct,
+  formatCurrency: brl,
+});
+
+// ---------- digital twin / simulador ----------
+// "E se": nunca altera dados reais, só projeta cenários a partir de médias
+// reais da carteira e da equipe atuais. Ver src/lib/simulator-engine.ts.
+
+export const simulatorBaseline = buildSimulationBaseline(clients, employees, tasks);
+
 // ---------- motor de inteligência ----------
 // Substitui os antigos arrays de alertas/insights escritos à mão por dados
 // calculados a partir do que já existe acima (clients, invoices, processes,
@@ -1494,4 +1643,5 @@ export const insights: Insight[] = [
   ...computeCapacityInsights(employeeCapacity, departmentCapacity, capacityForecast),
   ...computeObligationInsights({ obligations, clients }),
   ...computeCommunicationInsights(communications, clients),
+  ...computeFinancialInsights({ clients, formatCurrency: brl }),
 ];

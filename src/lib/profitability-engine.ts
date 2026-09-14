@@ -14,7 +14,7 @@ export type ProfitabilityEmployee = {
   costPerHour: number;
 };
 
-export type ProfitabilityClient = Pick<Client, "id" | "name" | "fee" | "department" | "hoursMonth">;
+export type ProfitabilityClient = Pick<Client, "id" | "name" | "fee" | "department" | "hoursMonth" | "owner">;
 
 export type MonthlyProfitability = {
   month: string;
@@ -150,26 +150,30 @@ export type ProfitabilityInsightInput = {
   formatCurrency: (value: number) => string;
 };
 
+const TODAY = "2026-09-14";
+
 export function computeProfitabilityInsights({ clients, clientsProfitability, formatCurrency }: ProfitabilityInsightInput): Insight[] {
   const insights: Insight[] = [];
-  const nameOf = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? clientId;
+  const clientOf = (clientId: string) => clients.find((c) => c.id === clientId);
   const actions = ["Abrir cliente", "Analisar horas", "Simular reajuste", "Criar tarefa", "Gerar recomendação comercial"];
 
   for (const cp of clientsProfitability) {
-    const name = nameOf(cp.clientId);
+    const client = clientOf(cp.clientId);
+    const name = client?.name ?? cp.clientId;
+    const base = { clientId: cp.clientId, ...(client ? { department: client.department, assignee: client.owner } : {}), link: "/rentabilidade", actions, createdAt: TODAY, status: "Aberto" as const };
     const { current } = cp;
     const past3 = marginNMonthsAgo(cp, 3);
 
     if (current.profit < 0) {
       insights.push({
+        ...base,
         id: `prof-deficit-${cp.clientId}`,
         kind: "Problema",
+        severity: "Crítica",
         title: `${name} opera com prejuízo de ${formatCurrency(Math.abs(current.profit))}/mês`,
         impact: `Margem atual de ${current.margin}% (custo total ${formatCurrency(current.totalCost)} vs. honorário ${formatCurrency(current.revenue)}).`,
-        cause: "Custo operacional real (mão de obra + indiretos + terceirizados) supera o honorário contratado.",
+        evidence: [`Custo operacional real (mão de obra + indiretos + terceirizados) supera o honorário contratado em ${formatCurrency(Math.abs(current.profit))}/mês.`],
         recommendation: `Reajustar para aproximadamente ${formatCurrency(suggestedFee(current))}/mês ou revisar o escopo de horas.`,
-        link: "/rentabilidade",
-        actions,
       });
     }
 
@@ -177,60 +181,62 @@ export function computeProfitabilityInsights({ clients, clientsProfitability, fo
     if (marginDrop >= 10) {
       const hoursGrowth = past3.hours > 0 ? Math.round(((current.hours - past3.hours) / past3.hours) * 100) : 0;
       insights.push({
+        ...base,
         id: `prof-margin-drop-${cp.clientId}`,
         kind: "Problema",
+        severity: "Alta",
         title: `A margem de ${name} caiu de ${past3.margin}% para ${current.margin}%`,
         impact: hoursGrowth > 0
           ? `O consumo de horas aumentou ${hoursGrowth}% nos últimos 3 meses (${past3.hours}h → ${current.hours}h).`
           : `Custo total subiu de ${formatCurrency(past3.totalCost)} para ${formatCurrency(current.totalCost)} nos últimos 3 meses.`,
-        cause: hoursGrowth > 0
-          ? "Consumo de horas cresceu sem revisão de honorário correspondente."
-          : "Custos indiretos ou terceirizados aumentaram no período.",
+        evidence: [
+          hoursGrowth > 0
+            ? "Consumo de horas cresceu sem revisão de honorário correspondente."
+            : "Custos indiretos ou terceirizados aumentaram no período.",
+        ],
         recommendation: `Avaliar reajuste para aproximadamente ${formatCurrency(suggestedFee(current))}/mês.`,
-        link: "/rentabilidade",
-        actions,
       });
     }
 
     const hoursGrowth3m = past3.hours > 0 ? (current.hours - past3.hours) / past3.hours : 0;
     if (hoursGrowth3m > 0.25) {
       insights.push({
+        ...base,
         id: `prof-hours-${cp.clientId}`,
         kind: "Problema",
+        severity: "Média",
         title: `${name} consumiu ${Math.round(hoursGrowth3m * 100)}% mais horas nos últimos 3 meses`,
         impact: `Consumo passou de ${past3.hours}h para ${current.hours}h/mês, elevando o custo de mão de obra.`,
-        cause: "Aumento de volume operacional sem ajuste de escopo ou preço.",
+        evidence: ["Aumento de volume operacional sem ajuste de escopo ou preço."],
         recommendation: "Analisar horas por tarefa e avaliar se o escopo contratado ainda reflete o esforço atual.",
-        link: "/rentabilidade",
-        actions,
       });
     }
 
     const costGrowth3m = past3.totalCost > 0 ? (current.totalCost - past3.totalCost) / past3.totalCost : 0;
     if (costGrowth3m > 0.2 && hoursGrowth3m <= 0.25) {
       insights.push({
+        ...base,
         id: `prof-cost-${cp.clientId}`,
         kind: "Problema",
+        severity: "Média",
         title: `O custo de atendimento de ${name} subiu ${Math.round(costGrowth3m * 100)}% nos últimos 3 meses`,
         impact: `De ${formatCurrency(past3.totalCost)} para ${formatCurrency(current.totalCost)}/mês.`,
-        cause: "Custos indiretos ou terceirizados aumentaram sem crescimento proporcional de horas.",
+        evidence: ["Custos indiretos ou terceirizados aumentaram sem crescimento proporcional de horas."],
         recommendation: "Revisar composição de custos indiretos e terceirizados alocados a este cliente.",
-        link: "/rentabilidade",
-        actions,
       });
     }
 
     const laborShare = current.revenue > 0 ? current.laborCost / current.revenue : 0;
     if (laborShare > 0.55) {
       insights.push({
+        ...base,
         id: `prof-effort-${cp.clientId}`,
         kind: "Problema",
+        severity: "Alta",
         title: `O preço de ${name} está incompatível com o esforço operacional`,
         impact: `Só a mão de obra consome ${Math.round(laborShare * 100)}% do honorário (${formatCurrency(current.laborCost)} de ${formatCurrency(current.revenue)}).`,
-        cause: "Honorário definido abaixo do esforço real necessário para atender o cliente.",
+        evidence: ["Honorário definido abaixo do esforço real necessário para atender o cliente."],
         recommendation: `Renegociar para aproximadamente ${formatCurrency(suggestedFee(current))}/mês.`,
-        link: "/rentabilidade",
-        actions,
       });
     }
   }

@@ -47,6 +47,8 @@ export type RevenueIntelligenceClient = Pick<
   | "complexityLastPeriod"
   | "fee"
   | "feeLastAdjustedAt"
+  | "department"
+  | "owner"
 >;
 
 export type RevenueIntelligenceInput = {
@@ -218,6 +220,8 @@ const reasonLabel: Record<RevenueOpportunityReason, string> = {
   "abaixo-de-similares": "Abaixo de clientes semelhantes",
 };
 
+const TODAY = "2026-09-14";
+
 export function computeRevenueOpportunityInsights(opportunities: RevenueOpportunity[], clients: RevenueIntelligenceClient[], formatCurrency: (v: number) => string): Insight[] {
   return opportunities
     .filter((o) => o.score >= 30)
@@ -227,12 +231,17 @@ export function computeRevenueOpportunityInsights(opportunities: RevenueOpportun
       return {
         id: `revenue-${o.clientId}`,
         kind: "Oportunidade" as const,
-        title: `${name}: oportunidade de receita (score ${o.score})`,
+        severity: o.score >= 70 ? ("Alta" as const) : o.score >= 40 ? ("Média" as const) : ("Baixa" as const),
+        title: `${name}: oportunidade de receita (score ${o.score}) — ${o.reasons.map((r) => reasonLabel[r]).join(" · ")}`,
+        clientId: o.clientId,
+        ...(client ? { department: client.department, assignee: client.owner } : {}),
+        evidence: o.evidence,
         impact: o.estimatedImpact,
-        cause: o.reasons.map((r) => reasonLabel[r]).join(" · "),
         recommendation: `Faixa recomendada: ${formatCurrency(o.recommendedRange.min)} – ${formatCurrency(o.recommendedRange.max)}/mês. Margem ${o.marginBefore}% → ${o.marginAfter}%.`,
         link: "/comercial",
         actions: ["Simular reajuste", "Enviar para aprovação"],
+        createdAt: TODAY,
+        status: "Aberto" as const,
       };
     });
 }

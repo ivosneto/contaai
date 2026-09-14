@@ -141,39 +141,54 @@ export function summarize(content: string, max = 90): string {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
-export type CommunicationInsightClient = Pick<Client, "id" | "name">;
+export type CommunicationInsightClient = Pick<Client, "id" | "name" | "department">;
+
+const TODAY = "2026-09-14";
 
 export function computeCommunicationInsights(communications: Communication[], clients: CommunicationInsightClient[]): Insight[] {
   const insights: Insight[] = [];
-  const nameOf = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? clientId;
+  const clientOf = (clientId: string) => clients.find((c) => c.id === clientId);
   const openActionable = communications.filter((m) => m.requiresAction);
 
   const urgent = openActionable.filter((m) => m.classification === "Urgente" || m.priority === "Crítica");
-  if (urgent.length > 0) {
-    const names = urgent.map((m) => `${nameOf(m.clientId)} (${m.subject})`);
+  for (const m of urgent) {
+    const client = clientOf(m.clientId);
     insights.push({
-      id: "inbox-urgent",
+      id: `inbox-urgent-${m.id}`,
       kind: "Problema",
-      title: `${urgent.length} mensagem(ns) urgente(s) aguardando resposta`,
-      impact: `${names.slice(0, 4).join(", ")}${names.length > 4 ? "…" : ""}.`,
-      cause: "Mensagens classificadas como urgentes ainda sem resposta.",
-      recommendation: "Responder ou atribuir essas mensagens agora.",
+      severity: "Crítica",
+      title: `${client?.name ?? m.clientId}: mensagem urgente aguardando resposta — "${m.subject}"`,
+      clientId: m.clientId,
+      ...(client ? { department: client.department } : {}),
+      assignee: m.assignee,
+      evidence: [`Recebida via ${m.channel} em ${m.createdAt}, ainda sem resposta.`, m.suggestedAction],
+      impact: "Mensagem classificada como urgente ainda sem resposta.",
+      recommendation: "Responder ou atribuir esta mensagem agora.",
       link: "/comunicacao",
       actions: ["Ver inbox", "Responder"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 
   const complaints = openActionable.filter((m) => m.classification === "Reclamação");
-  if (complaints.length > 0) {
+  for (const m of complaints) {
+    const client = clientOf(m.clientId);
     insights.push({
-      id: "inbox-complaints",
+      id: `inbox-complaint-${m.id}`,
       kind: "Problema",
-      title: `${complaints.length} reclamação(ões) em aberto na inbox`,
-      impact: `Sentimento negativo detectado em ${complaints.length} mensagem(ns) recentes.`,
-      cause: "Reclamações de clientes ainda sem tratativa registrada.",
+      severity: "Alta",
+      title: `${client?.name ?? m.clientId}: reclamação em aberto — "${m.subject}"`,
+      clientId: m.clientId,
+      ...(client ? { department: client.department } : {}),
+      assignee: m.assignee,
+      evidence: [`Sentimento ${m.sentiment.toLowerCase()} detectado em mensagem de ${m.createdAt}.`],
+      impact: "Reclamação de cliente ainda sem tratativa registrada.",
       recommendation: "Priorizar resposta e considerar abrir pendência de acompanhamento.",
       link: "/comunicacao",
       actions: ["Ver inbox", "Criar pendência"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 
@@ -181,12 +196,15 @@ export function computeCommunicationInsights(communications: Communication[], cl
     insights.push({
       id: "inbox-backlog",
       kind: "Problema",
+      severity: "Média",
       title: `${openActionable.length} mensagens exigem ação na Inbox`,
+      evidence: [`Volume de mensagens recebidas acima da capacidade de resposta atual (${openActionable.length} em aberto).`],
       impact: "Backlog de comunicação acumulando sem resposta ou atribuição.",
-      cause: "Volume de mensagens recebidas acima da capacidade de resposta atual.",
       recommendation: "Distribuir mensagens entre a equipe e responder as mais antigas primeiro.",
       link: "/comunicacao",
       actions: ["Ver inbox", "Atribuir"],
+      createdAt: TODAY,
+      status: "Aberto",
     });
   }
 
