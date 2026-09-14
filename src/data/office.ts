@@ -498,7 +498,7 @@ export const alerts: Alert[] = [
     level: "Informação",
     title: "NPS do mês fechou em 58",
     detail: "12 novas respostas, 2 detratores.",
-    link: "/indicadores",
+    link: "/inteligencia",
     actions: ["Ver respostas"],
   },
   {
