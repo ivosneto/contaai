@@ -205,6 +205,10 @@ const allServices: ServiceName[] = [
   "Consultoria",
 ];
 
+function at<T>(arr: readonly T[], i: number): T {
+  return arr[((i % arr.length) + arr.length) % arr.length] as T;
+}
+
 function seeded(i: number, mod: number) {
   return ((i * 9301 + 49297) % 233280) % mod;
 }
@@ -220,7 +224,7 @@ export const clients: Client[] = names.map((name, i) => {
     (_, s) => (seeded(i + s * 3, 10) > 3 && s < 4) || s === 0,
   );
   const fee = 900 + seeded(i, 9) * 420;
-  const costRatio = [0.42, 0.55, 0.68, 0.81, 1.12][seeded(i, 5)];
+  const costRatio = at([0.42, 0.55, 0.68, 0.81, 1.12], seeded(i, 5));
   const cost = Math.round(fee * costRatio);
   const overdue = seeded(i, 7) > 4 ? 1200 + seeded(i, 6) * 900 : 0;
   const complaints30d = seeded(i, 9) > 6 ? seeded(i, 3) + 1 : 0;
@@ -253,17 +257,15 @@ export const clients: Client[] = names.map((name, i) => {
     id: `c${i + 1}`,
     name,
     cnpj: `${10 + i}.${300 + i * 7}.${100 + i * 3}/0001-${10 + (i % 80)}`,
-    segment: segments[i % segments.length],
-    regime: regimes[seeded(i, 4)],
+    segment: at(segments, i),
+    regime: at(regimes, seeded(i, 4)),
     revenue: (600 + seeded(i, 60) * 220) * 1000,
     headcount: 3 + seeded(i, 70),
     services,
     fee,
     cost,
-    owner: owners[i % owners.length],
-    department: (["Fiscal", "Contábil", "Pessoal", "Societário"] as const)[
-      seeded(i, 4)
-    ],
+    owner: at(owners, i),
+    department: at(["Fiscal", "Contábil", "Pessoal", "Societário"] as const, seeded(i, 4)),
     nps,
     health,
     status,
@@ -315,21 +317,21 @@ const stages = [
 ] as const;
 
 export const opportunities: Opportunity[] = Array.from({ length: 30 }, (_, i) => {
-  const stage = stages[seeded(i, 7)];
+  const stage = at(stages, seeded(i, 7));
   return {
     id: `o${i + 1}`,
-    company: `${["Alfa", "Beta", "Delta", "Orion", "Prisma", "Vento", "Nobre", "Terra", "Lumen", "Sigma"][i % 10]} ${["Comércio", "Indústria", "Serviços", "Tech", "Distribuidora"][i % 5]}`,
-    contact: ["Sr. Almeida", "Dra. Peixoto", "Marcos T.", "Helena R.", "Igor S."][i % 5],
-    seller: ["Ana Beatriz", "Carlos Menezes", "Fernanda Dias"][i % 3],
-    source: ["Indicação", "Site", "Google Ads", "Evento", "Outbound"][i % 5],
+    company: `${at(["Alfa", "Beta", "Delta", "Orion", "Prisma", "Vento", "Nobre", "Terra", "Lumen", "Sigma"], i)} ${at(["Comércio", "Indústria", "Serviços", "Tech", "Distribuidora"], i)}`,
+    contact: at(["Sr. Almeida", "Dra. Peixoto", "Marcos T.", "Helena R.", "Igor S."], i),
+    seller: at(["Ana Beatriz", "Carlos Menezes", "Fernanda Dias"], i),
+    source: at(["Indicação", "Site", "Google Ads", "Evento", "Outbound"], i),
     services: allServices.slice(0, 2 + seeded(i, 3)),
     mrr: 800 + seeded(i, 12) * 350,
     setup: 500 + seeded(i, 6) * 400,
-    probability: [10, 25, 45, 70, 100, 0, 100][seeded(i, 7)],
+    probability: at([10, 25, 45, 70, 100, 0, 100], seeded(i, 7)),
     stage,
     expectedAt: `2026-${String(9 + (i % 3)).padStart(2, "0")}-${String(5 + (i % 20)).padStart(2, "0")}`,
-    competitor: seeded(i, 3) === 0 ? "Contabilizei" : undefined,
-    lossReason: stage === "Perdido" ? "Preço acima do concorrente" : undefined,
+    ...(seeded(i, 3) === 0 ? { competitor: "Contabilizei" } : {}),
+    ...(stage === "Perdido" ? { lossReason: "Preço acima do concorrente" } : {}),
   };
 });
 
@@ -347,19 +349,17 @@ const taskTitles = [
 ];
 
 export const tasks: Task[] = Array.from({ length: 100 }, (_, i) => {
-  const client = clients[i % clients.length];
+  const client = at(clients, i);
   const late = seeded(i, 10) > 6;
   return {
     id: `t${i + 1}`,
-    title: `${taskTitles[i % taskTitles.length]} — ${client.name}`,
+    title: `${at(taskTitles, i)} — ${client.name}`,
     clientId: client.id,
-    assignee: employees[i % 12].name,
-    department: employees[i % 12].department,
+    assignee: at(employees, i % 12).name,
+    department: at(employees, i % 12).department,
     due: `2026-09-${String(1 + (i % 28)).padStart(2, "0")}`,
-    status: (["A fazer", "Em andamento", "Em revisão", "Concluída"] as const)[
-      seeded(i, 4)
-    ],
-    priority: (["Baixa", "Média", "Alta", "Crítica"] as const)[seeded(i, 4)],
+    status: at(["A fazer", "Em andamento", "Em revisão", "Concluída"] as const, seeded(i, 4)),
+    priority: at(["Baixa", "Média", "Alta", "Crítica"] as const, seeded(i, 4)),
     late,
     hours: 1 + seeded(i, 8),
   };
@@ -374,7 +374,7 @@ const processNames = [
 ];
 
 export const processes: Process[] = Array.from({ length: 50 }, (_, i) => {
-  const client = clients[i % clients.length];
+  const client = at(clients, i);
   const stepNames = [
     "Solicitar documentos",
     "Receber",
@@ -388,7 +388,7 @@ export const processes: Process[] = Array.from({ length: 50 }, (_, i) => {
   const done = 1 + seeded(i, 8);
   return {
     id: `p${i + 1}`,
-    name: `${processNames[i % processNames.length]} — ${client.name}`,
+    name: `${at(processNames, i)} — ${client.name}`,
     clientId: client.id,
     department: client.department,
     progress: Math.round((done / stepNames.length) * 100),
@@ -397,7 +397,7 @@ export const processes: Process[] = Array.from({ length: 50 }, (_, i) => {
     cycleDays: 4 + seeded(i, 12),
     steps: stepNames.map((name, s) => ({
       name,
-      owner: employees[(i + s) % employees.length].name,
+      owner: at(employees, i + s).name,
       slaDays: 1 + (s % 3),
       avgDays: 1 + ((s + i) % 4),
       status:
