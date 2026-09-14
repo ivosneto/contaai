@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/comercial")({
   head: () => ({ meta: [
-    { title: "Comercial — Accounting OS" },
+    { title: "Comercial — ContaAI" },
     { name: "description", content: "Comercial do sistema operacional inteligente para escritórios contábeis." },
-    { property: "og:title", content: "Comercial — Accounting OS" },
+    { property: "og:title", content: "Comercial — ContaAI" },
     { property: "og:description", content: "Gestão contábil orientada por dados, processos e inteligência." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },

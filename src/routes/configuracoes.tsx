@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/configuracoes")({
   head: () => ({ meta: [
-    { title: "Configurações — Accounting OS" },
+    { title: "Configurações — ContaAI" },
     { name: "description", content: "Configurações do sistema operacional inteligente para escritórios contábeis." },
-    { property: "og:title", content: "Configurações — Accounting OS" },
+    { property: "og:title", content: "Configurações — ContaAI" },
     { property: "og:description", content: "Gestão contábil orientada por dados, processos e inteligência." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },

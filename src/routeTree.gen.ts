@@ -21,7 +21,9 @@ import { Route as ConhecimentoRouteImport } from './routes/conhecimento'
 import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as InteligenciaRouteImport } from './routes/inteligencia'
+import { Route as ObrigacoesRouteImport } from './routes/obrigacoes'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PendenciasRouteImport } from './routes/pendencias'
 import { Route as PessoasRouteImport } from './routes/pessoas'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as ProcessosRouteImport } from './routes/processos'
@@ -92,9 +94,19 @@ const InteligenciaRoute = InteligenciaRouteImport.update({
   path: '/inteligencia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ObrigacoesRoute = ObrigacoesRouteImport.update({
+  id: '/obrigacoes',
+  path: '/obrigacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PendenciasRoute = PendenciasRouteImport.update({
+  id: '/pendencias',
+  path: '/pendencias',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PessoasRoute = PessoasRouteImport.update({
@@ -156,7 +168,9 @@ export interface FileRoutesByFullPath {
   '/documentos': typeof DocumentosRoute
   '/financeiro': typeof FinanceiroRoute
   '/inteligencia': typeof InteligenciaRoute
+  '/obrigacoes': typeof ObrigacoesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pendencias': typeof PendenciasRoute
   '/pessoas': typeof PessoasRoute
   '/portal': typeof PortalRoute
   '/processos': typeof ProcessosRoute
@@ -180,7 +194,9 @@ export interface FileRoutesByTo {
   '/documentos': typeof DocumentosRoute
   '/financeiro': typeof FinanceiroRoute
   '/inteligencia': typeof InteligenciaRoute
+  '/obrigacoes': typeof ObrigacoesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pendencias': typeof PendenciasRoute
   '/pessoas': typeof PessoasRoute
   '/portal': typeof PortalRoute
   '/processos': typeof ProcessosRoute
@@ -205,7 +221,9 @@ export interface FileRoutesById {
   '/documentos': typeof DocumentosRoute
   '/financeiro': typeof FinanceiroRoute
   '/inteligencia': typeof InteligenciaRoute
+  '/obrigacoes': typeof ObrigacoesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pendencias': typeof PendenciasRoute
   '/pessoas': typeof PessoasRoute
   '/portal': typeof PortalRoute
   '/processos': typeof ProcessosRoute
@@ -231,7 +249,9 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/financeiro'
     | '/inteligencia'
+    | '/obrigacoes'
     | '/onboarding'
+    | '/pendencias'
     | '/pessoas'
     | '/portal'
     | '/processos'
@@ -255,7 +275,9 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/financeiro'
     | '/inteligencia'
+    | '/obrigacoes'
     | '/onboarding'
+    | '/pendencias'
     | '/pessoas'
     | '/portal'
     | '/processos'
@@ -279,7 +301,9 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/financeiro'
     | '/inteligencia'
+    | '/obrigacoes'
     | '/onboarding'
+    | '/pendencias'
     | '/pessoas'
     | '/portal'
     | '/processos'
@@ -304,7 +328,9 @@ export interface RootRouteChildren {
   DocumentosRoute: typeof DocumentosRoute
   FinanceiroRoute: typeof FinanceiroRoute
   InteligenciaRoute: typeof InteligenciaRoute
+  ObrigacoesRoute: typeof ObrigacoesRoute
   OnboardingRoute: typeof OnboardingRoute
+  PendenciasRoute: typeof PendenciasRoute
   PessoasRoute: typeof PessoasRoute
   PortalRoute: typeof PortalRoute
   ProcessosRoute: typeof ProcessosRoute
@@ -401,11 +427,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InteligenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/obrigacoes': {
+      id: '/obrigacoes'
+      path: '/obrigacoes'
+      fullPath: '/obrigacoes'
+      preLoaderRoute: typeof ObrigacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding': {
       id: '/onboarding'
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pendencias': {
+      id: '/pendencias'
+      path: '/pendencias'
+      fullPath: '/pendencias'
+      preLoaderRoute: typeof PendenciasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pessoas': {
@@ -499,7 +539,9 @@ const rootRouteChildren: RootRouteChildren = {
   DocumentosRoute: DocumentosRoute,
   FinanceiroRoute: FinanceiroRoute,
   InteligenciaRoute: InteligenciaRoute,
+  ObrigacoesRoute: ObrigacoesRoute,
   OnboardingRoute: OnboardingRoute,
+  PendenciasRoute: PendenciasRoute,
   PessoasRoute: PessoasRoute,
   PortalRoute: PortalRoute,
   ProcessosRoute: ProcessosRoute,

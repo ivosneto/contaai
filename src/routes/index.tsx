@@ -6,9 +6,9 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CEO Dashboard — Accounting OS" },
+      { title: "CEO Dashboard — ContaAI" },
       { name: "description", content: "Visão executiva do escritório contábil: receita, margem, clientes, capacidade e ações prioritárias." },
-      { property: "og:title", content: "CEO Dashboard — Accounting OS" },
+      { property: "og:title", content: "CEO Dashboard — ContaAI" },
       { property: "og:description", content: "Tudo que precisa da sua atenção hoje, em um só lugar." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

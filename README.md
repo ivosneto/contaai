@@ -1,6 +1,6 @@
-# Accounting OS
+# ContaAI
 
-ACCOUNTING OS — SISTEMA OPERACIONAL INTELIGENTE PARA ESCRITÓRIOS DE CONTABILIDADE
+CONTAAI — SISTEMA OPERACIONAL INTELIGENTE PARA ESCRITÓRIOS DE CONTABILIDADE
 
 1. VISÃO DO PRODUTO
 
@@ -10,7 +10,7 @@ O produto deve ser muito mais do que um CRM, ERP, sistema de tarefas ou software
 
 A visão é criar o:
 
-ACCOUNTING OS
+CONTAAI
 
 O sistema operacional inteligente do escritório contábil.
 
@@ -2028,7 +2028,7 @@ Como falar com vocês?
 
 Arquitetar pensando em uma evolução para:
 
-Accounting OS Marketplace
+ContaAI Marketplace
 
 Possibilitar:
 

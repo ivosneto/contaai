@@ -1,4 +1,4 @@
-# Accounting OS — Roadmap funcional
+# ContaAI — Roadmap funcional
 
 - [ ] Fase 1 — Autenticação, perfis, workspaces, membros, roles, permissões, RLS e onboarding inicial
 - [ ] Fase 2 — Clientes, Customer 360, funcionários, tarefas e processos persistentes
@@ -9,3 +9,7 @@
 - [ ] Fase 7 — Portal do cliente, documentos, storage e comunicação
 - [ ] Fase 8 — Benchmarking, Digital Twin e Revenue Intelligence
 - [ ] Fase 9 — Adaptadores de integrações externas e preparação para produção
+
+## Entidades centrais
+
+Modeladas em `src/data/office.ts` (mock, coerente entre módulos) e/ou `supabase/migrations` (persistência): Escritório, Usuário, Colaborador, Cliente, Serviço, Documento, Obrigação, Pendência, Tarefa, Processo, Projeto, Comunicação, Conta financeira, Transação, Honorário, Fatura, Pagamento, Horas trabalhadas, Capacidade, Insight, Alerta, Automação, Timeline. O Cliente é a entidade central — tudo que se relaciona a ele deve poder ser acessado pelo Customer 360.
