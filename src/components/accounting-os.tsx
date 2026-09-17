@@ -67,8 +67,10 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -97,7 +99,6 @@ import {
   healthScores,
   healthTone,
   insights,
-  knowledgeArticles,
   margin,
   meetings,
   monthlyRevenue,
@@ -106,14 +107,24 @@ import {
   opportunities,
   processes,
   profitabilityDashboard,
-  projects,
   revenueOpportunities,
   timeline,
   totals,
   type Client,
+  type Department,
+  type KnowledgeArticle,
+  type PendencyPriority,
+  type Project,
+  type ServiceName,
 } from "@/data/office";
 import { cn } from "@/lib/utils";
-import { OfficeStoreProvider, useOfficeStore } from "@/data/store";
+import {
+  OfficeStoreProvider,
+  useOfficeStore,
+  type ClientEditableFields,
+  type NewKnowledgeArticleInput,
+  type NewTaskInput,
+} from "@/data/store";
 import { PendenciasPage } from "@/components/pendencias-page";
 import { CapacityPage } from "@/components/capacity-page";
 import { DocumentsPage } from "@/components/documents-page";
@@ -507,19 +518,29 @@ function OpportunityPreview({opportunity}:{opportunity:typeof revenueOpportuniti
 }
 
 function ClientsPage(){
- const navigate=useNavigate(); const search=useRouterState({select:s=>s.location.search}) as {filtro?:string}; const [q,setQ]=useState(""); const [filter,setFilter]=useState(search.filtro==="risco"?"Em risco":"Todos");
- const list=clients.filter(c=>(filter==="Todos"||filter==="Em risco"&&c.health<55||filter===c.status||filter==="Alta rentabilidade"&&clientMargin(c)>=50||filter==="Baixa rentabilidade"&&clientMargin(c)<35)&&c.name.toLowerCase().includes(q.toLowerCase()));
- return <><PageHeader title="Clientes" description="CRM contábil com saúde, rentabilidade, serviços e relacionamento em uma única visão." action={<Button className="rounded-xl" onClick={()=>comingSoon("clientes")}><Plus/> Novo cliente</Button>}/><Glass className="p-4"><div className="flex flex-col gap-3 md:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input value={q} onChange={e=>setQ(e.target.value)} className="pl-9" placeholder="Buscar por empresa, CNPJ ou responsável…"/></div><div className="flex flex-wrap gap-2">{["Todos","Ativo","Em onboarding","Em risco","Inadimplente","Alta rentabilidade","Baixa rentabilidade"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div></div>{list.length===0&&<p className="mt-6 py-8 text-center text-sm text-muted-foreground">Nenhum cliente encontrado com esses filtros. Ajuste a busca ou limpe os filtros.</p>}<div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b border-glass-line text-[11px] uppercase text-muted-foreground"><th className="px-3 py-3">Cliente</th><th>Regime</th><th>Serviços</th><th>Honorário</th><th>Margem</th><th>NPS</th><th>Health Score</th><th>Status</th></tr></thead><tbody>{list.map(c=><tr key={c.id} onClick={()=>void navigate({to:"/clientes/$clientId",params:{clientId:c.id}})} className="cursor-pointer border-b border-glass-line/60 hover:bg-glass"><td className="px-3 py-3"><p className="font-semibold">{c.name}</p><p className="text-xs text-muted-foreground">{c.cnpj} · {c.owner}</p></td><td>{c.regime}</td><td><div className="flex gap-1">{c.services.slice(0,3).map(s=><Badge key={s} tone="brand">{s}</Badge>)}</div></td><td className="font-medium">{brl(c.fee)}</td><td className={clientMargin(c)<0?"font-semibold text-bad":clientMargin(c)<35?"font-semibold text-warn":"font-semibold text-good"}>{clientMargin(c)}%</td><td>{c.nps??"—"}</td><td><Badge tone={healthTone(c.health)}>{c.health}/100</Badge></td><td><Badge tone={c.status==="Em risco"?"bad":c.status==="Inadimplente"?"warn":"neutral"}>{c.status}</Badge></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-muted-foreground">{list.length} de {clients.length} clientes demonstrativos</p></Glass></>;
+ const navigate=useNavigate(); const {clients: liveClients}=useOfficeStore(); const search=useRouterState({select:s=>s.location.search}) as {filtro?:string}; const [q,setQ]=useState(""); const [filter,setFilter]=useState(search.filtro==="risco"?"Em risco":"Todos");
+ const list=liveClients.filter(c=>(filter==="Todos"||filter==="Em risco"&&c.health<55||filter===c.status||filter==="Alta rentabilidade"&&clientMargin(c)>=50||filter==="Baixa rentabilidade"&&clientMargin(c)<35)&&c.name.toLowerCase().includes(q.toLowerCase()));
+ return <><PageHeader title="Clientes" description="CRM contábil com saúde, rentabilidade, serviços e relacionamento em uma única visão." action={<Button className="rounded-xl" onClick={()=>comingSoon("clientes")}><Plus/> Novo cliente</Button>}/><Glass className="p-4"><div className="flex flex-col gap-3 md:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input value={q} onChange={e=>setQ(e.target.value)} className="pl-9" placeholder="Buscar por empresa, CNPJ ou responsável…"/></div><div className="flex flex-wrap gap-2">{["Todos","Ativo","Em onboarding","Em risco","Inadimplente","Alta rentabilidade","Baixa rentabilidade"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div></div>{list.length===0&&<p className="mt-6 py-8 text-center text-sm text-muted-foreground">Nenhum cliente encontrado com esses filtros. Ajuste a busca ou limpe os filtros.</p>}<div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b border-glass-line text-[11px] uppercase text-muted-foreground"><th className="px-3 py-3">Cliente</th><th>Regime</th><th>Serviços</th><th>Honorário</th><th>Margem</th><th>NPS</th><th>Health Score</th><th>Status</th></tr></thead><tbody>{list.map(c=><tr key={c.id} onClick={()=>void navigate({to:"/clientes/$clientId",params:{clientId:c.id}})} className="cursor-pointer border-b border-glass-line/60 hover:bg-glass"><td className="px-3 py-3"><p className="font-semibold">{c.name}</p><p className="text-xs text-muted-foreground">{c.cnpj} · {c.owner}</p></td><td>{c.regime}</td><td><div className="flex gap-1">{c.services.slice(0,3).map(s=><Badge key={s} tone="brand">{s}</Badge>)}</div></td><td className="font-medium">{brl(c.fee)}</td><td className={clientMargin(c)<0?"font-semibold text-bad":clientMargin(c)<35?"font-semibold text-warn":"font-semibold text-good"}>{clientMargin(c)}%</td><td>{c.nps??"—"}</td><td><Badge tone={healthTone(c.health)}>{c.health}/100</Badge></td><td><Badge tone={c.status==="Em risco"?"bad":c.status==="Inadimplente"?"warn":"neutral"}>{c.status}</Badge></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-muted-foreground">{list.length} de {liveClients.length} clientes</p></Glass></>;
 }
 
+const CLIENT_SERVICE_OPTIONS=["Contábil","Fiscal","Pessoal","BPO","Societário","Consultoria"] as const;
+const CLIENT_REGIMES=["Simples Nacional","Lucro Presumido","Lucro Real","MEI"] as const;
+const CLIENT_STATUSES=["Ativo","Em onboarding","Em risco","Inadimplente","Sem atividade"] as const;
+const EMPTY_CLIENT_EDIT:ClientEditableFields={name:"",cnpj:"",segment:"",regime:"Simples Nacional",owner:"",services:[],fee:0,status:"Ativo"};
+
 function Customer360({clientId}:{clientId:string}){
- const {tasks, pendencies, communications, documents, obligations, activityLog, completePendency, createTaskFromPendency, createCommunicationFromPendency, createPendency, createTaskForClient, createCommercialRecommendation, markChurnReviewed, churnReviewed, confirmAction, processDocument, createPendencyFromObligation} = useOfficeStore();
+ const {tasks, pendencies, communications, documents, obligations, activityLog, clients: liveClients, updateClient, processes: liveProcesses, completePendency, createTaskFromPendency, createCommunicationFromPendency, createPendency, createTaskForClient, createCommercialRecommendation, markChurnReviewed, churnReviewed, confirmAction, processDocument, createPendencyFromObligation} = useOfficeStore();
  const [tab,setTab]=useState("resumo");
- const c=clientById(clientId)??clients[0]; if(!c)return null;
+ const [editOpen,setEditOpen]=useState(false);
+ const [editForm,setEditForm]=useState<ClientEditableFields>(EMPTY_CLIENT_EDIT);
+ const c=liveClients.find(x=>x.id===clientId)??liveClients[0]; if(!c)return null;
+ const openEdit=()=>{setEditForm({name:c.name,cnpj:c.cnpj,segment:c.segment,regime:c.regime,owner:c.owner,services:c.services,fee:c.fee,status:c.status});setEditOpen(true);};
+ const toggleEditService=(s:ServiceName)=>setEditForm(f=>({...f,services:f.services.includes(s)?f.services.filter(x=>x!==s):[...f.services,s]}));
+ const saveEdit=()=>{updateClient(c.id,editForm);setEditOpen(false);toast.success("Cadastro do cliente atualizado.");};
  const cHealth=healthScores.find(h=>h.clientId===c.id);
  const cChurn=churnRisks.find(x=>x.clientId===c.id);
  const cTasks=tasks.filter(t=>t.clientId===c.id).slice(0,6);
- const cProcesses=processes.filter(p=>p.clientId===c.id).slice(0,4);
+ const cProcesses=liveProcesses.filter(p=>p.clientId===c.id).slice(0,4);
  const cDocuments=documents.filter(d=>d.clientId===c.id);
  const cObligations=obligations.filter(o=>o.clientId===c.id);
  const cPendencies=pendencies.filter(p=>p.clientId===c.id);
@@ -540,7 +561,7 @@ function Customer360({clientId}:{clientId:string}){
  ].sort((a,b)=>b.date.localeCompare(a.date));
  const contactMessage=`Olá! Notamos que a saúde da conta de ${c.name} pode se beneficiar de um contato próximo — podemos alinhar as próximas entregas?`;
  const escalate=(text:string)=>confirmAction({title:"Criar pendência a partir da comunicação",description:`Isso cria uma pendência para ${c.name} com base em "${text}".`,impact:"operacional",successMessage:"Pendência criada.",onConfirm:()=>createPendency({clientId:c.id,category:"Cliente",title:text,description:text,assignee:c.owner,priority:"Alta",dueDate:"2026-09-20"})});
- return <><PageHeader eyebrow="Customer 360" title={c.name} description={`${c.cnpj} · ${c.segment} · ${c.regime}`} action={<div className="flex gap-2"><Badge tone={healthTone(c.health)}>Health Score {c.health}/100</Badge><Button size="sm" variant="outline"><MoreHorizontal/></Button></div>}/><div className="grid gap-4 xl:grid-cols-4"><Kpi label="Honorário" value={brl(c.fee)} change="receita mensal" tone="brand"/><Kpi label="Custo operacional real" value={brl(cProfitability?.current.totalCost??c.cost)} change={`${cProfitability?.current.hours??c.hoursMonth}h/mês`} tone="warn"/><Kpi label="Margem" value={`${cProfitability?.current.margin??clientMargin(c)}%`} change={(cProfitability?.current.margin??clientMargin(c))>35?"acima da meta":"reajuste recomendado"} tone={(cProfitability?.current.margin??clientMargin(c))>35?"good":"bad"}/><Kpi label="NPS" value={c.nps?String(c.nps):"—"} change={`cliente desde ${c.since.slice(0,4)}`} tone="brand"/></div><Tabs value={tab} onValueChange={setTab} className="mt-4"><TabsList className="glass-soft h-auto flex-wrap justify-start p-1"><TabsTrigger value="resumo">Resumo</TabsTrigger><TabsTrigger value="timeline">Timeline</TabsTrigger><TabsTrigger value="processos">Processos</TabsTrigger><TabsTrigger value="financeiro">Financeiro</TabsTrigger><TabsTrigger value="documentos">Documentos</TabsTrigger><TabsTrigger value="obrigacoes">Obrigações</TabsTrigger><TabsTrigger value="pendencias">Pendências<Badge tone="brand" className="ml-1.5">{cPendencies.filter(p=>p.status!=="Concluída"&&p.status!=="Cancelada").length}</Badge></TabsTrigger><TabsTrigger value="comunicacao">Comunicação</TabsTrigger><TabsTrigger value="oportunidades">Oportunidades</TabsTrigger><TabsTrigger value="notas">Notas internas</TabsTrigger></TabsList><TabsContent value="resumo"><div className="grid gap-4 xl:grid-cols-3"><Glass className="p-5 xl:col-span-2">
+ return <><PageHeader eyebrow="Customer 360" title={c.name} description={`${c.cnpj} · ${c.segment} · ${c.regime}`} action={<div className="flex gap-2"><Badge tone={healthTone(c.health)}>Health Score {c.health}/100</Badge><Button size="sm" variant="outline" onClick={openEdit}><MoreHorizontal/> Editar cliente</Button></div>}/><div className="grid gap-4 xl:grid-cols-4"><Kpi label="Honorário" value={brl(c.fee)} change="receita mensal" tone="brand"/><Kpi label="Custo operacional real" value={brl(cProfitability?.current.totalCost??c.cost)} change={`${cProfitability?.current.hours??c.hoursMonth}h/mês`} tone="warn"/><Kpi label="Margem" value={`${cProfitability?.current.margin??clientMargin(c)}%`} change={(cProfitability?.current.margin??clientMargin(c))>35?"acima da meta":"reajuste recomendado"} tone={(cProfitability?.current.margin??clientMargin(c))>35?"good":"bad"}/><Kpi label="NPS" value={c.nps?String(c.nps):"—"} change={`cliente desde ${c.since.slice(0,4)}`} tone="brand"/></div><Tabs value={tab} onValueChange={setTab} className="mt-4"><TabsList className="glass-soft h-auto flex-wrap justify-start p-1"><TabsTrigger value="resumo">Resumo</TabsTrigger><TabsTrigger value="timeline">Timeline</TabsTrigger><TabsTrigger value="processos">Processos</TabsTrigger><TabsTrigger value="financeiro">Financeiro</TabsTrigger><TabsTrigger value="documentos">Documentos</TabsTrigger><TabsTrigger value="obrigacoes">Obrigações</TabsTrigger><TabsTrigger value="pendencias">Pendências<Badge tone="brand" className="ml-1.5">{cPendencies.filter(p=>p.status!=="Concluída"&&p.status!=="Cancelada").length}</Badge></TabsTrigger><TabsTrigger value="comunicacao">Comunicação</TabsTrigger><TabsTrigger value="oportunidades">Oportunidades</TabsTrigger><TabsTrigger value="notas">Notas internas</TabsTrigger></TabsList><TabsContent value="resumo"><div className="grid gap-4 xl:grid-cols-3"><Glass className="p-5 xl:col-span-2">
   <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-display text-lg font-semibold">Customer Health Score</h2>{cHealth&&<Badge tone={cHealth.classification==="Saudável"?"good":cHealth.classification==="Atenção"?"warn":"bad"}>{cHealth.score}/100 · {cHealth.classification}</Badge>}</div>
   <p className="mt-1 text-xs text-muted-foreground">Metodologia transparente: soma de 11 fatores com peso fixo (NPS, inadimplência, reclamações, solicitações, atrasos, utilização, interação, frequência, rentabilidade, pendências e evolução do relacionamento).</p>
   {cHealth&&<>
@@ -598,7 +619,58 @@ function Customer360({clientId}:{clientId:string}){
       </div>
     );})}
   </div>
-</Glass></TabsContent><TabsContent value="pendencias"><Glass className="p-5"><div className="space-y-2">{cPendencies.length===0&&<p className="text-sm text-muted-foreground">Nenhuma pendência para este cliente.</p>}{cPendencies.map(p=><div key={p.id} className="glass-soft rounded-xl p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{p.title}</p><p className="text-xs text-muted-foreground">{p.category} · {p.assignee} · prazo {p.dueDate}</p></div><Badge tone={p.status==="Concluída"?"good":p.priority==="Crítica"||p.priority==="Alta"?"bad":"warn"}>{p.status}</Badge></div>{p.status!=="Concluída"&&p.status!=="Cancelada"&&<div className="mt-2 flex flex-wrap gap-1.5"><Button size="sm" className="h-7" onClick={()=>confirmAction({title:"Concluir pendência",description:p.title,impact:"operacional",successMessage:"Pendência concluída.",onConfirm:()=>completePendency(p.id)})}>Concluir</Button><Button size="sm" variant="outline" className="h-7" onClick={()=>confirmAction({title:"Gerar tarefa",description:p.title,impact:"operacional",successMessage:"Tarefa criada.",onConfirm:()=>createTaskFromPendency(p.id)})}>Gerar tarefa</Button><Button size="sm" variant="outline" className="h-7" onClick={()=>confirmAction({title:"Gerar comunicação",description:p.title,impact:"operacional",successMessage:"Comunicação criada.",onConfirm:()=>createCommunicationFromPendency(p.id)})}>Gerar comunicação</Button></div>}</div>)}</div></Glass></TabsContent><TabsContent value="comunicacao"><Glass className="p-5"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-display text-lg font-semibold">Comunicação</h2><Link to="/comunicacao" className="text-xs font-semibold text-brand">Abrir inbox unificada →</Link></div><div className="space-y-2">{feed.length===0&&<p className="text-sm text-muted-foreground">Sem comunicação registrada.</p>}{feed.map(f=><div key={f.id} className="glass-soft flex items-start justify-between gap-3 rounded-xl p-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase text-muted-foreground">{f.label} · {f.date}</p><p className="text-sm">{f.text}</p></div>{f.canEscalate&&<Button size="sm" variant="outline" className="h-7 shrink-0" onClick={()=>escalate(f.text)}>Criar pendência</Button>}</div>)}</div></Glass></TabsContent><TabsContent value="oportunidades"><Glass className="p-5"><DataList items={cOpportunities.map(o=>({title:`${o.services.slice(0,2).join(" + ")}`,sub:`${brl(o.mrr)}/mês · ${o.probability}%`,badge:o.stage,tone:o.stage==="Perdido"?"bad":o.stage==="Fechado"?"good":"brand"}))}/>{cOpportunities.length===0&&<p className="text-sm text-muted-foreground">Nenhuma oportunidade em aberto para este cliente.</p>}</Glass></TabsContent><TabsContent value="notas"><Glass className="p-5"><Textarea placeholder="Registre uma nota interna sobre este cliente…"/><Button className="mt-3" onClick={()=>comingSoon("notas internas")}>Salvar nota</Button></Glass></TabsContent></Tabs><Glass className="mt-4 p-5"><h2 className="font-display text-lg font-semibold">Próximas tarefas</h2><div className="mt-3"><DataList items={cTasks.map(t=>({title:t.title,sub:`${t.assignee} · ${t.due}`,badge:t.priority,tone:t.late?"bad":"neutral"}))}/></div></Glass></>;
+</Glass></TabsContent><TabsContent value="pendencias"><Glass className="p-5"><div className="space-y-2">{cPendencies.length===0&&<p className="text-sm text-muted-foreground">Nenhuma pendência para este cliente.</p>}{cPendencies.map(p=><div key={p.id} className="glass-soft rounded-xl p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{p.title}</p><p className="text-xs text-muted-foreground">{p.category} · {p.assignee} · prazo {p.dueDate}</p></div><Badge tone={p.status==="Concluída"?"good":p.priority==="Crítica"||p.priority==="Alta"?"bad":"warn"}>{p.status}</Badge></div>{p.status!=="Concluída"&&p.status!=="Cancelada"&&<div className="mt-2 flex flex-wrap gap-1.5"><Button size="sm" className="h-7" onClick={()=>confirmAction({title:"Concluir pendência",description:p.title,impact:"operacional",successMessage:"Pendência concluída.",onConfirm:()=>completePendency(p.id)})}>Concluir</Button><Button size="sm" variant="outline" className="h-7" onClick={()=>confirmAction({title:"Gerar tarefa",description:p.title,impact:"operacional",successMessage:"Tarefa criada.",onConfirm:()=>createTaskFromPendency(p.id)})}>Gerar tarefa</Button><Button size="sm" variant="outline" className="h-7" onClick={()=>confirmAction({title:"Gerar comunicação",description:p.title,impact:"operacional",successMessage:"Comunicação criada.",onConfirm:()=>createCommunicationFromPendency(p.id)})}>Gerar comunicação</Button></div>}</div>)}</div></Glass></TabsContent><TabsContent value="comunicacao"><Glass className="p-5"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-display text-lg font-semibold">Comunicação</h2><Link to="/comunicacao" className="text-xs font-semibold text-brand">Abrir inbox unificada →</Link></div><div className="space-y-2">{feed.length===0&&<p className="text-sm text-muted-foreground">Sem comunicação registrada.</p>}{feed.map(f=><div key={f.id} className="glass-soft flex items-start justify-between gap-3 rounded-xl p-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase text-muted-foreground">{f.label} · {f.date}</p><p className="text-sm">{f.text}</p></div>{f.canEscalate&&<Button size="sm" variant="outline" className="h-7 shrink-0" onClick={()=>escalate(f.text)}>Criar pendência</Button>}</div>)}</div></Glass></TabsContent><TabsContent value="oportunidades"><Glass className="p-5"><DataList items={cOpportunities.map(o=>({title:`${o.services.slice(0,2).join(" + ")}`,sub:`${brl(o.mrr)}/mês · ${o.probability}%`,badge:o.stage,tone:o.stage==="Perdido"?"bad":o.stage==="Fechado"?"good":"brand"}))}/>{cOpportunities.length===0&&<p className="text-sm text-muted-foreground">Nenhuma oportunidade em aberto para este cliente.</p>}</Glass></TabsContent><TabsContent value="notas"><Glass className="p-5"><Textarea placeholder="Registre uma nota interna sobre este cliente…"/><Button className="mt-3" onClick={()=>comingSoon("notas internas")}>Salvar nota</Button></Glass></TabsContent></Tabs><Glass className="mt-4 p-5"><h2 className="font-display text-lg font-semibold">Próximas tarefas</h2><div className="mt-3"><DataList items={cTasks.map(t=>({title:t.title,sub:`${t.assignee} · ${t.due}`,badge:t.priority,tone:t.late?"bad":"neutral"}))}/></div></Glass>
+<Dialog open={editOpen} onOpenChange={setEditOpen}>
+  <DialogContent>
+    <DialogHeader><DialogTitle>Editar cliente</DialogTitle></DialogHeader>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Nome</label><Input className="mt-1" value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))}/></div>
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">CNPJ</label><Input className="mt-1" value={editForm.cnpj} onChange={e=>setEditForm(f=>({...f,cnpj:e.target.value}))}/></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Segmento</label><Input className="mt-1" value={editForm.segment} onChange={e=>setEditForm(f=>({...f,segment:e.target.value}))}/></div>
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Responsável</label><Input className="mt-1" value={editForm.owner} onChange={e=>setEditForm(f=>({...f,owner:e.target.value}))}/></div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground">Regime</label>
+          <Select value={editForm.regime} onValueChange={v=>setEditForm(f=>({...f,regime:v as ClientEditableFields["regime"]}))}>
+            <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+            <SelectContent>{CLIENT_REGIMES.map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
+          <Select value={editForm.status} onValueChange={v=>setEditForm(f=>({...f,status:v as ClientEditableFields["status"]}))}>
+            <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+            <SelectContent>{CLIENT_STATUSES.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground">Honorário (R$/mês)</label>
+          <Input className="mt-1" type="number" min={0} value={editForm.fee} onChange={e=>setEditForm(f=>({...f,fee:Number(e.target.value)}))}/>
+        </div>
+      </div>
+      <div>
+        <label className="text-xs font-semibold uppercase text-muted-foreground">Serviços contratados</label>
+        <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {CLIENT_SERVICE_OPTIONS.map(s=>(
+            <label key={s} className="flex items-center gap-2 rounded-lg bg-glass px-2.5 py-2 text-sm">
+              <Checkbox checked={editForm.services.includes(s)} onCheckedChange={()=>toggleEditService(s)}/>
+              {s}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={()=>setEditOpen(false)}>Cancelar</Button>
+      <Button onClick={saveEdit} disabled={!editForm.name.trim()||!editForm.cnpj.trim()||!editForm.owner.trim()}>Salvar</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+</>;
 }
 
 function TimelineList({events}:{events:typeof timeline}){return <Glass className="p-5"><div className="relative ml-3 border-l border-brand/20 pl-6">{events.map(e=><div key={e.id} className="relative pb-6 last:pb-0"><span className="absolute -left-[29px] top-1 size-2 rounded-full bg-brand ring-4 ring-background"/><p className="text-xs text-muted-foreground">{new Date(`${e.date}T12:00:00`).toLocaleDateString("pt-BR")}</p><p className="mt-1 text-sm font-semibold">{e.title}</p><p className="text-sm text-muted-foreground">{e.detail}</p></div>)}</div></Glass>}
@@ -651,9 +723,119 @@ function RevenueIntelligenceSection(){
   </Glass>;
 }
 
-function ProcessesPage(){const [filter,setFilter]=useState("Todos"); const list=processes.filter(p=>filter==="Todos"||filter==="Em risco"&&!p.slaOk||filter===p.department); const atRisk=processes.filter(p=>!p.slaOk).length; const slaPct=Math.round(processes.filter(p=>p.slaOk).length/processes.length*100); const avgRework=Math.round(processes.reduce((s,p)=>s+p.rework,0)/processes.length); return <><PageHeader title="Processos" description="Execução recorrente, SLA e inteligência sobre gargalos e retrabalho." action={<Button onClick={()=>comingSoon("processos")}><Plus/> Novo processo</Button>}/><div className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Kpi label="Processos ativos" value={String(processes.length)} change="cadastrados no escritório" tone="brand"/><Kpi label="Dentro do SLA" value={`${slaPct}%`} change="dos processos" tone={slaPct>=90?"good":"warn"}/><Kpi label="Em risco" value={String(atRisk)} change="exigem atenção" tone={atRisk>0?"warn":"good"}/><Kpi label="Retrabalho médio" value={`${avgRework}%`} change="da carteira" tone={avgRework>10?"bad":"good"}/></div><Glass className="mt-4 p-4"><div className="mb-4 flex flex-wrap gap-2">{["Todos","Em risco","Fiscal","Contábil","Pessoal","Societário"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>{list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhum processo encontrado com esses filtros.</p>}<div className="space-y-3">{list.slice(0,20).map(p=><details key={p.id} className="glass-soft rounded-xl p-4"><summary className="flex cursor-pointer list-none items-center gap-3"><div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-muted-foreground">{p.department} · ciclo médio {p.cycleDays} dias · retrabalho {p.rework}%</p></div><div className="w-24"><div className="h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-brand" style={{width:`${p.progress}%`}}/></div><p className="mt-1 text-right text-[10px]">{p.progress}%</p></div><Badge tone={p.slaOk?"good":"bad"}>{p.slaOk?"No SLA":"Em risco"}</Badge></summary><div className="mt-4 grid gap-2 border-t border-glass-line pt-4 md:grid-cols-4">{p.steps.map((s,i)=><div key={s.name} className="rounded-lg bg-glass p-3"><p className="text-xs font-semibold">{i+1}. {s.name}</p><p className="mt-1 text-[11px] text-muted-foreground">{s.owner}</p><Badge tone={s.status==="Atrasada"?"bad":s.status==="Concluída"?"good":"neutral"}>{s.status}</Badge></div>)}</div></details>)}</div></Glass></>}
+const DEPARTMENTS=["Fiscal","Contábil","Pessoal","Societário","Financeiro","Comercial"] as const;
+const emptyProcessForm={clientId:"",name:"",department:"Fiscal" as Department,assignee:""};
 
-function TasksPage(){const {tasks,completeTask}=useOfficeStore(); const search=useRouterState({select:s=>s.location.search}) as {filtro?:string}; const [filter,setFilter]=useState(search.filtro==="atrasadas"?"Atrasadas":"Todas"); const list=tasks.filter(t=>filter==="Todas"||filter==="Atrasadas"&&t.late||filter===t.status||filter===t.department); return <><PageHeader title="Tarefas" description="Prioridades, responsáveis e contexto do cliente sem depender de planilhas." action={<Button onClick={()=>comingSoon("tarefas")}><Plus/> Nova tarefa</Button>}/><Glass className="p-4"><div className="mb-4 flex flex-wrap gap-2">{["Todas","Atrasadas","A fazer","Em andamento","Em revisão","Fiscal","Contábil","Pessoal"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>{list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhuma tarefa encontrada com esses filtros.</p>}<div className="space-y-2">{list.slice(0,30).map(t=>{const done=t.status==="Concluída"; return <div key={t.id} className="glass-soft flex flex-wrap items-center gap-3 rounded-xl p-3"><button className={cn("grid size-6 shrink-0 place-items-center rounded-full border",done?"border-good bg-good/10 text-good":"border-input text-muted-foreground hover:border-brand hover:text-brand")} disabled={done} onClick={()=>completeTask(t.id)} aria-label="Concluir tarefa"><CheckCircle2 className="size-4"/></button><div className="min-w-[240px] flex-1"><p className={cn("text-sm font-semibold",done&&"text-muted-foreground line-through")}>{t.title}</p><p className="text-xs text-muted-foreground">{t.assignee} · vence {new Date(`${t.due}T12:00`).toLocaleDateString("pt-BR")}</p></div><Badge tone={done?"good":t.late?"bad":t.priority==="Alta"?"warn":"neutral"}>{done?"Concluída":t.late?"Atrasada":t.priority}</Badge><Badge tone="brand">{t.department}</Badge><span className="text-xs text-muted-foreground">{t.hours}h</span></div>})}</div></Glass></>}
+function ProcessesPage(){
+  const {processes: liveProcesses, clients: liveClients, createProcess, updateProcess}=useOfficeStore();
+  const [filter,setFilter]=useState("Todos");
+  const [open,setOpen]=useState(false);
+  const [form,setForm]=useState(emptyProcessForm);
+  const list=liveProcesses.filter(p=>filter==="Todos"||filter==="Em risco"&&!p.slaOk||filter===p.department);
+  const atRisk=liveProcesses.filter(p=>!p.slaOk).length;
+  const slaPct=liveProcesses.length?Math.round(liveProcesses.filter(p=>p.slaOk).length/liveProcesses.length*100):0;
+  const avgRework=liveProcesses.length?Math.round(liveProcesses.reduce((s,p)=>s+p.rework,0)/liveProcesses.length):0;
+  const submit=()=>{if(!form.clientId||!form.name.trim()||!form.assignee)return;createProcess(form);setForm(emptyProcessForm);setOpen(false);};
+  return <>
+    <PageHeader title="Processos" description="Execução recorrente, SLA e inteligência sobre gargalos e retrabalho." action={<Button onClick={()=>setOpen(true)}><Plus/> Novo processo</Button>}/>
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Kpi label="Processos ativos" value={String(liveProcesses.length)} change="cadastrados no escritório" tone="brand"/><Kpi label="Dentro do SLA" value={`${slaPct}%`} change="dos processos" tone={slaPct>=90?"good":"warn"}/><Kpi label="Em risco" value={String(atRisk)} change="exigem atenção" tone={atRisk>0?"warn":"good"}/><Kpi label="Retrabalho médio" value={`${avgRework}%`} change="da carteira" tone={avgRework>10?"bad":"good"}/></div>
+    <Glass className="mt-4 p-4">
+      <div className="mb-4 flex flex-wrap gap-2">{["Todos","Em risco",...DEPARTMENTS].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>
+      {list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhum processo encontrado com esses filtros.</p>}
+      <div className="space-y-3">{list.slice(0,20).map(p=><details key={p.id} className="glass-soft rounded-xl p-4"><summary className="flex cursor-pointer list-none items-center gap-3"><div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-muted-foreground">{p.department} · ciclo médio {p.cycleDays} dias · retrabalho {p.rework}%</p></div><div className="w-24"><div className="h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-brand" style={{width:`${p.progress}%`}}/></div><p className="mt-1 text-right text-[10px]">{p.progress}%</p></div><Badge tone={p.slaOk?"good":"bad"}>{p.slaOk?"No SLA":"Em risco"}</Badge></summary><div className="mt-4 grid gap-2 border-t border-glass-line pt-4 md:grid-cols-4">{p.steps.map((s,i)=><div key={s.name} className="rounded-lg bg-glass p-3"><p className="text-xs font-semibold">{i+1}. {s.name}</p><p className="mt-1 text-[11px] text-muted-foreground">{s.owner}</p><Badge tone={s.status==="Atrasada"?"bad":s.status==="Concluída"?"good":"neutral"}>{s.status}</Badge></div>)}</div>{p.progress<100&&<div className="mt-3 border-t border-glass-line pt-3"><Button size="sm" variant="outline" onClick={()=>updateProcess(p.id,{progress:Math.min(100,p.progress+20)})}>+20% concluído</Button></div>}</details>)}</div>
+    </Glass>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Novo processo</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Cliente</label>
+            <Select value={form.clientId} onValueChange={v=>setForm(f=>({...f,clientId:v}))}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente"/></SelectTrigger>
+              <SelectContent>{liveClients.map(c=><SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Nome do processo</label><Input className="mt-1" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ex.: Fechamento mensal"/></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Departamento</label>
+              <Select value={form.department} onValueChange={v=>setForm(f=>({...f,department:v as Department}))}>
+                <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+                <SelectContent>{DEPARTMENTS.map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Responsável</label>
+              <Select value={form.assignee} onValueChange={v=>setForm(f=>({...f,assignee:v}))}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                <SelectContent>{employees.map(e=><SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">As etapas padrão do departamento são geradas automaticamente ao criar o processo.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button>
+          <Button onClick={submit} disabled={!form.clientId||!form.name.trim()||!form.assignee}>Criar processo</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>;
+}
+
+const TASK_PRIORITIES=["Baixa","Média","Alta","Crítica"] as const;
+const emptyTaskForm:NewTaskInput={clientId:"",title:"",assignee:"",priority:"Média",dueDate:"2026-09-20",hours:2};
+
+function TasksPage(){
+  const {tasks,clients: liveClients,completeTask,createTask}=useOfficeStore();
+  const search=useRouterState({select:s=>s.location.search}) as {filtro?:string};
+  const [filter,setFilter]=useState(search.filtro==="atrasadas"?"Atrasadas":"Todas");
+  const [open,setOpen]=useState(false);
+  const [form,setForm]=useState<NewTaskInput>(emptyTaskForm);
+  const list=tasks.filter(t=>filter==="Todas"||filter==="Atrasadas"&&t.late||filter===t.status||filter===t.department);
+  const submit=()=>{if(!form.clientId||!form.title.trim()||!form.assignee)return;createTask(form);setForm(emptyTaskForm);setOpen(false);};
+  return <><PageHeader title="Tarefas" description="Prioridades, responsáveis e contexto do cliente sem depender de planilhas." action={<Button onClick={()=>setOpen(true)}><Plus/> Nova tarefa</Button>}/><Glass className="p-4"><div className="mb-4 flex flex-wrap gap-2">{["Todas","Atrasadas","A fazer","Em andamento","Em revisão","Fiscal","Contábil","Pessoal"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>{list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhuma tarefa encontrada com esses filtros.</p>}<div className="space-y-2">{list.slice(0,30).map(t=>{const done=t.status==="Concluída"; return <div key={t.id} className="glass-soft flex flex-wrap items-center gap-3 rounded-xl p-3"><button className={cn("grid size-6 shrink-0 place-items-center rounded-full border",done?"border-good bg-good/10 text-good":"border-input text-muted-foreground hover:border-brand hover:text-brand")} disabled={done} onClick={()=>completeTask(t.id)} aria-label="Concluir tarefa"><CheckCircle2 className="size-4"/></button><div className="min-w-[240px] flex-1"><p className={cn("text-sm font-semibold",done&&"text-muted-foreground line-through")}>{t.title}</p><p className="text-xs text-muted-foreground">{t.assignee} · vence {new Date(`${t.due}T12:00`).toLocaleDateString("pt-BR")}</p></div><Badge tone={done?"good":t.late?"bad":t.priority==="Alta"?"warn":"neutral"}>{done?"Concluída":t.late?"Atrasada":t.priority}</Badge><Badge tone="brand">{t.department}</Badge><span className="text-xs text-muted-foreground">{t.hours}h</span></div>})}</div></Glass>
+  <Dialog open={open} onOpenChange={setOpen}>
+    <DialogContent>
+      <DialogHeader><DialogTitle>Nova tarefa</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground">Cliente</label>
+          <Select value={form.clientId} onValueChange={v=>setForm(f=>({...f,clientId:v}))}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente"/></SelectTrigger>
+            <SelectContent>{liveClients.map(c=><SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Título</label><Input className="mt-1" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="O que precisa ser feito?"/></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Responsável</label>
+            <Select value={form.assignee} onValueChange={v=>setForm(f=>({...f,assignee:v}))}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione"/></SelectTrigger>
+              <SelectContent>{employees.map(e=><SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Prioridade</label>
+            <Select value={form.priority} onValueChange={v=>setForm(f=>({...f,priority:v as PendencyPriority}))}>
+              <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+              <SelectContent>{TASK_PRIORITIES.map(p=><SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Prazo</label><Input type="date" className="mt-1" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></div>
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Horas estimadas</label><Input type="number" min={1} className="mt-1" value={form.hours} onChange={e=>setForm(f=>({...f,hours:Number(e.target.value)}))}/></div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button>
+        <Button onClick={submit} disabled={!form.clientId||!form.title.trim()||!form.assignee}>Criar tarefa</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+  </>;
+}
 
 
 function ProfitabilityPage(){
@@ -719,22 +901,111 @@ function ProfitabilityPage(){
 
 
 
-function KnowledgePage(){const [q,setQ]=useState(""); const list=knowledgeArticles.filter(x=>(x.title+x.category).toLowerCase().includes(q.toLowerCase())); return <><PageHeader title="Conhecimento" description="Processos, procedimentos, decisões e memória empresarial com controle de acesso." action={<Button onClick={()=>comingSoon("artigos")}><Plus/> Novo artigo</Button>}/><Glass className="p-5"><div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/><Input className="h-11 pl-9" value={q} onChange={e=>setQ(e.target.value)} placeholder="Pergunte: como fazemos o fechamento fiscal?"/></div>{list.length===0&&<p className="mt-5 py-8 text-center text-sm text-muted-foreground">Nenhum artigo encontrado para "{q}".</p>}<div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map(k=><article key={k.id} className="glass-soft rounded-xl p-4"><Badge tone="brand">{k.category}</Badge><h2 className="mt-3 font-semibold">{k.title}</h2><p className="mt-1 text-sm text-muted-foreground">{k.summary}</p><Button variant="ghost" size="sm" className="mt-3 px-0 text-brand" onClick={()=>comingSoon("o conteúdo completo do artigo")}>Abrir <ArrowRight/></Button></article>)}</div></Glass></>}
+const emptyArticleForm:NewKnowledgeArticleInput={category:"",title:"",summary:"",content:""};
+
+function KnowledgePage(){
+  const {knowledgeArticles: liveArticles,createKnowledgeArticle,updateKnowledgeArticle,deleteKnowledgeArticle,confirmAction}=useOfficeStore();
+  const [q,setQ]=useState("");
+  const [open,setOpen]=useState(false);
+  const [editingId,setEditingId]=useState<string|null>(null);
+  const [form,setForm]=useState<NewKnowledgeArticleInput>(emptyArticleForm);
+  const [viewingId,setViewingId]=useState<string|null>(null);
+  const list=liveArticles.filter(x=>(x.title+x.category).toLowerCase().includes(q.toLowerCase()));
+  const viewing=liveArticles.find(k=>k.id===viewingId)??null;
+  const openCreate=()=>{setEditingId(null);setForm(emptyArticleForm);setOpen(true);};
+  const openEdit=(k:KnowledgeArticle)=>{setEditingId(k.id);setForm({category:k.category,title:k.title,summary:k.summary,content:k.content});setViewingId(null);setOpen(true);};
+  const submit=()=>{
+    if(!form.title.trim()||!form.category.trim())return;
+    if(editingId)updateKnowledgeArticle(editingId,form);else createKnowledgeArticle(form);
+    setOpen(false);
+  };
+  return <><PageHeader title="Conhecimento" description="Processos, procedimentos, decisões e memória empresarial com controle de acesso." action={<Button onClick={openCreate}><Plus/> Novo artigo</Button>}/><Glass className="p-5"><div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/><Input className="h-11 pl-9" value={q} onChange={e=>setQ(e.target.value)} placeholder="Pergunte: como fazemos o fechamento fiscal?"/></div>{list.length===0&&<p className="mt-5 py-8 text-center text-sm text-muted-foreground">Nenhum artigo encontrado para "{q}".</p>}<div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map(k=><article key={k.id} className="glass-soft rounded-xl p-4"><Badge tone="brand">{k.category}</Badge><h2 className="mt-3 font-semibold">{k.title}</h2><p className="mt-1 text-sm text-muted-foreground">{k.summary}</p><Button variant="ghost" size="sm" className="mt-3 px-0 text-brand" onClick={()=>setViewingId(k.id)}>Abrir <ArrowRight/></Button></article>)}</div></Glass>
+  <Dialog open={viewingId!==null} onOpenChange={o=>!o&&setViewingId(null)}>
+    <DialogContent className="max-w-xl">
+      {viewing&&<>
+        <DialogHeader><Badge tone="brand">{viewing.category}</Badge><DialogTitle className="mt-2">{viewing.title}</DialogTitle></DialogHeader>
+        <p className="whitespace-pre-line text-sm text-muted-foreground">{viewing.content||viewing.summary}</p>
+        <DialogFooter>
+          <Button variant="outline" onClick={()=>confirmDeleteArticle(viewing.id)}>Excluir</Button>
+          <Button onClick={()=>openEdit(viewing)}>Editar</Button>
+        </DialogFooter>
+      </>}
+    </DialogContent>
+  </Dialog>
+  <Dialog open={open} onOpenChange={setOpen}>
+    <DialogContent>
+      <DialogHeader><DialogTitle>{editingId?"Editar artigo":"Novo artigo"}</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Categoria</label><Input className="mt-1" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} placeholder="Ex.: Processos"/></div>
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Título</label><Input className="mt-1" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}/></div>
+        </div>
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Resumo</label><Textarea className="mt-1" value={form.summary} onChange={e=>setForm(f=>({...f,summary:e.target.value}))} placeholder="Uma frase que resume o artigo"/></div>
+        <div><label className="text-xs font-semibold uppercase text-muted-foreground">Conteúdo</label><Textarea className="mt-1 min-h-32" value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} placeholder="Corpo completo do artigo…"/></div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button>
+        <Button onClick={submit} disabled={!form.title.trim()||!form.category.trim()}>{editingId?"Salvar":"Criar artigo"}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+  </>;
+
+  function confirmDeleteArticle(id:string){
+    const article=liveArticles.find(k=>k.id===id);
+    if(!article)return;
+    confirmAction({
+      title:"Excluir artigo",
+      description:`Excluir "${article.title}"? Essa ação não pode ser desfeita.`,
+      impact:"operacional",
+      confirmLabel:"Excluir",
+      successMessage:"Artigo excluído.",
+      onConfirm:()=>{deleteKnowledgeArticle(id);setViewingId(null);},
+    });
+  }
+}
 
 function OnboardingPage(){const steps=["Nome do escritório","Número de funcionários","Departamentos","Número de clientes","Sistemas utilizados","Importação","Configuração de processos","Convidar equipe"]; const [current,setCurrent]=useState(3);return <><PageHeader title="Onboarding do escritório" description="Configure a operação uma vez. O sistema reutiliza os dados em todos os módulos."/><Glass className="mx-auto max-w-3xl p-6"><div className="flex justify-between gap-1">{steps.map((s,i)=><div key={s} className="flex-1"><div className={cn("h-1.5 rounded-full",i<=current?"bg-brand":"bg-muted")}/><p className="mt-2 hidden text-[10px] text-muted-foreground md:block">{i+1}. {s}</p></div>)}</div><div className="py-10 text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl bg-brand/10 text-brand"><Building2/></div><p className="mt-5 font-serif text-lg italic text-brand">Etapa {current+1} de 8</p><h2 className="mt-1 font-display text-2xl font-semibold">{steps[current]}</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{current===3?"Quantos clientes ativos o escritório atende hoje?":"Configure esta etapa para personalizar seu ContaAI."}</p>{current===3&&<Input type="number" defaultValue="128" className="mx-auto mt-5 max-w-xs text-center text-lg"/>}</div><div className="flex justify-between"><Button variant="outline" disabled={current===0} onClick={()=>setCurrent(v=>Math.max(0,v-1))}>Voltar</Button><Button onClick={()=>{if(current===7){toast.success("Seu escritório está pronto.");setCurrent(0)}else setCurrent(v=>v+1)}}>{current===7?"Finalizar":"Continuar"}<ArrowRight/></Button></div></Glass></>}
 
 function AlertsPage(){const navigate=useNavigate(); const {alertStatus,resolveAlert,confirmAction}=useOfficeStore(); const [filter,setFilter]=useState("Todos");const list=alerts.filter(a=>filter==="Todos"||a.level===filter);return <><PageHeader title="Central de Alertas" description="Tudo que exige atenção, decisão ou representa oportunidade."/><div className="mb-4 flex flex-wrap gap-2">{["Todos","Crítico","Atenção","Informação","Oportunidade"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div><Glass className="p-4">{list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhum alerta {filter!=="Todos"?`do tipo "${filter}"`:""} no momento.</p>}<div className="space-y-2">{list.map(a=>{const status=alertStatus[a.id]; return <div key={a.id} className="glass-soft rounded-xl p-4"><div className="flex items-start gap-3"><StatusDot tone={a.level==="Crítico"?"bad":a.level==="Atenção"?"warn":a.level==="Oportunidade"?"good":"brand"}/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{a.title}</p><Badge tone={a.level==="Crítico"?"bad":a.level==="Atenção"?"warn":a.level==="Oportunidade"?"good":"brand"}>{a.level}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{a.detail}</p><div className="mt-3 flex flex-wrap gap-2">{status?<Badge tone="good">Resolvido</Badge>:<>{a.actions.map((x,i)=><Button key={x} size="sm" variant={i===0?"default":"outline"} onClick={()=>i===0?confirmAction({title:x,description:a.title,impact:"operacional",successMessage:`${x}: ação executada.`,onConfirm:()=>resolveAlert(a.id)}):void navigate({to:a.link as "/pessoas"})}>{x}</Button>)}</>}</div></div></div></div>})}</div></Glass></>}
 
+const PROJECT_STATUSES=["Planejado","Em andamento","Em aprovação","Concluído"] as const;
+const emptyProjectForm={clientId:"",name:"",dueDate:"2026-10-15"};
+
 function ProjectsPage(){
   const navigate=useNavigate();
+  const {projects: liveProjects, clients: liveClients, createProject, updateProject}=useOfficeStore();
   const [filter,setFilter]=useState("Todos");
-  const list=projects.filter(p=>filter==="Todos"||filter===p.status);
-  return <><PageHeader title="Projetos" description="Entregas não recorrentes, escopo, responsáveis e marcos em um único lugar." action={<Button onClick={()=>comingSoon("projetos")}><Plus/> Novo projeto</Button>}/>
+  const [open,setOpen]=useState(false);
+  const [form,setForm]=useState(emptyProjectForm);
+  const list=liveProjects.filter(p=>filter==="Todos"||filter===p.status);
+  const submit=()=>{if(!form.clientId||!form.name.trim())return;createProject(form);setForm(emptyProjectForm);setOpen(false);};
+  return <><PageHeader title="Projetos" description="Entregas não recorrentes, escopo, responsáveis e marcos em um único lugar." action={<Button onClick={()=>setOpen(true)}><Plus/> Novo projeto</Button>}/>
     <Glass className="p-4">
-      <div className="mb-4 flex flex-wrap gap-2">{["Todos","Planejado","Em andamento","Em aprovação","Concluído"].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>
+      <div className="mb-4 flex flex-wrap gap-2">{["Todos",...PROJECT_STATUSES].map(f=><Button key={f} size="sm" variant={filter===f?"default":"outline"} onClick={()=>setFilter(f)}>{f}</Button>)}</div>
       {list.length===0&&<p className="py-8 text-center text-sm text-muted-foreground">Nenhum projeto encontrado com esse filtro.</p>}
-      <div className="space-y-2">{list.map(p=>{const client=clientById(p.clientId); return <button key={p.id} onClick={()=>client&&void navigate({to:"/clientes/$clientId",params:{clientId:client.id}})} className="glass-soft flex w-full flex-wrap items-center gap-3 rounded-xl p-3 text-left"><div className="min-w-[220px] flex-1"><p className="text-sm font-semibold">{p.name}</p><p className="text-xs text-muted-foreground">vence {p.dueDate}</p></div><div className="w-28"><div className="h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-brand" style={{width:`${p.progress}%`}}/></div><p className="mt-1 text-right text-[10px]">{p.progress}%</p></div><Badge tone={p.status==="Concluído"?"good":p.status==="Em aprovação"?"warn":"brand"}>{p.status}</Badge></button>})}</div>
+      <div className="space-y-2">{list.map(p=>{const client=liveClients.find(c=>c.id===p.clientId); return <div key={p.id} className="glass-soft flex flex-wrap items-center gap-3 rounded-xl p-3"><button onClick={()=>client&&void navigate({to:"/clientes/$clientId",params:{clientId:client.id}})} className="min-w-[220px] flex-1 text-left"><p className="text-sm font-semibold hover:text-brand">{p.name}</p><p className="text-xs text-muted-foreground">{client?.name??"—"} · vence {p.dueDate}</p></button><div className="w-28"><div className="h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-brand" style={{width:`${p.progress}%`}}/></div><p className="mt-1 text-right text-[10px]">{p.progress}%</p></div><Select value={p.status} onValueChange={v=>updateProject(p.id,{status:v as Project["status"],progress:v==="Concluído"?100:p.progress})}><SelectTrigger className="h-8 w-40 text-xs"><SelectValue/></SelectTrigger><SelectContent>{PROJECT_STATUSES.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>})}</div>
     </Glass>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Novo projeto</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Cliente</label>
+            <Select value={form.clientId} onValueChange={v=>setForm(f=>({...f,clientId:v}))}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente"/></SelectTrigger>
+              <SelectContent>{liveClients.map(c=><SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Nome do projeto</label><Input className="mt-1" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ex.: Migração de sistema fiscal"/></div>
+          <div><label className="text-xs font-semibold uppercase text-muted-foreground">Prazo</label><Input type="date" className="mt-1" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button>
+          <Button onClick={submit} disabled={!form.clientId||!form.name.trim()}>Criar projeto</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </>;
 }
 

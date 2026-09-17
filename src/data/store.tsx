@@ -24,7 +24,6 @@ import {
 import { ContaAILogo } from "@/components/brand/logo";
 import {
   automations as seedAutomations,
-  clientById,
   communications as seedCommunications,
   documents as seedDocuments,
   employees,
@@ -32,6 +31,7 @@ import {
   projects,
   tasks as seedTasks,
   timeEntries,
+  type Client,
   type ClientDocument,
   type Communication,
   type CommunicationClassification,
@@ -39,12 +39,15 @@ import {
   type Department,
   type DocumentType,
   type Insight,
+  type KnowledgeArticle,
   type Obligation,
   type ObligationPriority,
   type ObligationType,
   type Pendency,
   type PendencyCategory,
   type PendencyPriority,
+  type Process,
+  type Project,
   type Task,
   type TimelineEvent,
 } from "@/data/office";
@@ -52,8 +55,20 @@ import { OBLIGATION_DEPARTMENT, buildChecklist } from "@/lib/obligations-engine"
 import { runDocumentPipeline } from "@/lib/documents-engine";
 import { classifyContent, summarize } from "@/lib/communication-engine";
 import { buildDepartmentCapacity, computeCapacityRecommendations, computeEmployeeCapacity } from "@/lib/capacity-engine";
+import { buildProcessSteps } from "@/lib/process-engine";
 import type { Automation, AutomationMatch, AutomationRun } from "@/lib/automation-engine";
-import { fetchDomainBootstrap, persistObligation, persistPendency, persistTask } from "@/data/server-functions/domain";
+import {
+  deleteKnowledgeArticleFn,
+  fetchDomainBootstrap,
+  persistClient,
+  persistKnowledgeArticle,
+  persistObligation,
+  persistPendency,
+  persistProcess,
+  persistProject,
+  persistTask,
+  persistTimelineEvent,
+} from "@/data/server-functions/domain";
 
 /**
  * seedTasks (100 tarefas de src/data/office.ts) continua importado só como
@@ -88,6 +103,10 @@ type StoreState = {
   documents: ClientDocument[];
   obligations: Obligation[];
   automations: Automation[];
+  clients: Client[];
+  processes: Process[];
+  projects: Project[];
+  knowledgeArticles: KnowledgeArticle[];
   insightStatus: Record<string, EntryStatus>;
   alertStatus: Record<string, EntryStatus>;
   churnReviewed: Record<string, string>; // clientId -> data em que foi marcado como analisado
@@ -139,6 +158,17 @@ function today() {
   return "2026-09-14";
 }
 
+/**
+ * clientById do próprio store (não o de office.ts): resolve contra
+ * state.clients, que nasce do Supabase e reflete edições (UPDATE_CLIENT)
+ * imediatamente. Garante que uma tarefa/pendência criada logo após editar um
+ * cliente use o dado atual — o clientById de office.ts continua servindo só
+ * como snapshot estático para o resto do app (ver nota no plano desta tarefa).
+ */
+function findClient(state: StoreState, id: string): Client | undefined {
+  return state.clients.find((c) => c.id === id);
+}
+
 export type NewPendencyInput = {
   clientId: string;
   category: PendencyCategory;
@@ -167,6 +197,32 @@ export type NewDocumentInput = {
 };
 
 export type NewAutomationInput = Pick<Automation, "name" | "trigger" | "conditions" | "actions">;
+
+export type NewTaskInput = {
+  clientId: string;
+  title: string;
+  assignee: string;
+  priority: PendencyPriority;
+  dueDate: string;
+  hours: number;
+};
+
+export type ClientEditableFields = Pick<Client, "name" | "cnpj" | "segment" | "regime" | "owner" | "services" | "fee" | "status">;
+
+export type NewProcessInput = {
+  clientId: string;
+  name: string;
+  department: Department;
+  assignee: string;
+};
+
+export type NewProjectInput = {
+  clientId: string;
+  name: string;
+  dueDate: string;
+};
+
+export type NewKnowledgeArticleInput = Pick<KnowledgeArticle, "category" | "title" | "summary" | "content">;
 
 type Action =
   | { type: "CREATE_PENDENCY"; input: NewPendencyInput }
@@ -198,7 +254,16 @@ type Action =
   | { type: "RUN_AUTOMATION"; automationId: string; matches: AutomationMatch[] }
   | { type: "CREATE_AUTOMATION"; input: NewAutomationInput }
   | { type: "REDISTRIBUTE_FROM_INSIGHT"; insightId: string }
-  | { type: "DISMISS_LIVE_INSIGHT"; id: string };
+  | { type: "DISMISS_LIVE_INSIGHT"; id: string }
+  | { type: "CREATE_TASK"; input: NewTaskInput }
+  | { type: "UPDATE_CLIENT"; id: string; patch: Partial<ClientEditableFields> }
+  | { type: "CREATE_PROCESS"; input: NewProcessInput }
+  | { type: "UPDATE_PROCESS"; id: string; patch: Partial<Pick<Process, "progress" | "slaOk">> }
+  | { type: "CREATE_PROJECT"; input: NewProjectInput }
+  | { type: "UPDATE_PROJECT"; id: string; patch: Partial<Pick<Project, "status" | "progress" | "dueDate">> }
+  | { type: "CREATE_KNOWLEDGE_ARTICLE"; input: NewKnowledgeArticleInput }
+  | { type: "UPDATE_KNOWLEDGE_ARTICLE"; id: string; patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">> }
+  | { type: "DELETE_KNOWLEDGE_ARTICLE"; id: string };
 
 function logFor(clientId: string, type: TimelineEvent["type"], title: string, detail: string): TimelineEvent {
   return { id: genId("log"), clientId, date: today(), type, title, detail };
@@ -236,7 +301,7 @@ function applyCreatePendency(state: StoreState, input: NewPendencyInput): StoreS
 }
 
 function applyCreateTaskForClient(state: StoreState, clientId: string, title: string): StoreState {
-  const client = clientById(clientId);
+  const client = findClient(state, clientId);
   const t: Task = {
     id: genId("t"),
     title,
@@ -257,7 +322,7 @@ function applyCreateTaskForClient(state: StoreState, clientId: string, title: st
 }
 
 function applyCreateCommercialRecommendation(state: StoreState, clientId: string, title: string, description: string): StoreState {
-  const client = clientById(clientId);
+  const client = findClient(state, clientId);
   const p: Pendency = {
     id: genId("pd"),
     clientId,
@@ -283,7 +348,7 @@ function applyCreateCommercialRecommendation(state: StoreState, clientId: string
 function applyProcessDocument(state: StoreState, documentId: string): StoreState {
   const doc = state.documents.find((d) => d.id === documentId);
   if (!doc || doc.pipelineStage === "Concluído") return state;
-  const client = clientById(doc.clientId);
+  const client = findClient(state, doc.clientId);
   if (!client) return state;
 
   const result = runDocumentPipeline({ type: doc.type, category: doc.category, competence: doc.competence }, client, state.obligations, hashIndex(doc.id));
@@ -516,7 +581,7 @@ function reducer(state: StoreState, action: Action): StoreState {
     case "CREATE_TASK_FROM_PENDENCY": {
       const p = state.pendencies.find((x) => x.id === action.pendencyId);
       if (!p) return state;
-      const client = clientById(p.clientId);
+      const client = findClient(state, p.clientId);
       const t: Task = {
         id: genId("t"),
         title: p.title,
@@ -538,7 +603,7 @@ function reducer(state: StoreState, action: Action): StoreState {
     case "CREATE_COMMUNICATION_FROM_PENDENCY": {
       const p = state.pendencies.find((x) => x.id === action.pendencyId);
       if (!p) return state;
-      const client = clientById(p.clientId);
+      const client = findClient(state, p.clientId);
       const threadId = genId("thread");
       const c: Communication = {
         id: genId("cm"),
@@ -613,7 +678,7 @@ function reducer(state: StoreState, action: Action): StoreState {
       return { ...state, capacityLog: [entry, ...state.capacityLog] };
     }
     case "CREATE_OBLIGATION": {
-      const client = clientById(action.input.clientId);
+      const client = findClient(state, action.input.clientId);
       const municipality = state.obligations.find((o) => o.clientId === action.input.clientId)?.municipality ?? "Não informado";
       const ob: Obligation = {
         id: genId("ob"),
@@ -677,7 +742,7 @@ function reducer(state: StoreState, action: Action): StoreState {
       };
     }
     case "UPLOAD_DOCUMENT": {
-      const client = clientById(action.input.clientId);
+      const client = findClient(state, action.input.clientId);
       const doc: ClientDocument = {
         id: genId("doc"),
         clientId: action.input.clientId,
@@ -749,7 +814,7 @@ function reducer(state: StoreState, action: Action): StoreState {
       };
     }
     case "CREATE_CLIENT_MESSAGE": {
-      const client = clientById(action.clientId);
+      const client = findClient(state, action.clientId);
       const classification = classifyContent(action.content);
       const subject = action.content.length > 60 ? `${action.content.slice(0, 60)}…` : action.content;
       const m: Communication = {
@@ -798,15 +863,15 @@ function reducer(state: StoreState, action: Action): StoreState {
             category: "Interna",
             title: `Alerta: ${task?.title ?? match.label}`,
             description: match.label,
-            assignee: task?.assignee ?? clientById(match.clientId)?.owner ?? "Equipe",
+            assignee: task?.assignee ?? findClient(next, match.clientId)?.owner ?? "Equipe",
             priority: "Alta",
             dueDate: task?.due ?? today(),
           });
         } else if (actionType === "criar-tarefa-responsavel") {
-          const client = clientById(match.clientId);
+          const client = findClient(next, match.clientId);
           next = applyCreateTaskForClient(next, match.clientId, `Investigar risco de churn — ${client?.name ?? match.clientId}`);
         } else if (actionType === "criar-oportunidade-comercial") {
-          const client = clientById(match.clientId);
+          const client = findClient(next, match.clientId);
           next = applyCreateCommercialRecommendation(next, match.clientId, `Propor reajuste — ${client?.name ?? match.clientId}`, match.label);
         }
       }
@@ -839,12 +904,106 @@ function reducer(state: StoreState, action: Action): StoreState {
       return applyRedistributeFromInsight(state, action.insightId);
     case "DISMISS_LIVE_INSIGHT":
       return { ...state, liveInsights: state.liveInsights.filter((i) => i.id !== action.id) };
+    case "CREATE_TASK": {
+      const client = findClient(state, action.input.clientId);
+      const t: Task = {
+        id: genId("t"),
+        title: action.input.title,
+        clientId: action.input.clientId,
+        assignee: action.input.assignee,
+        department: client?.department ?? "Contábil",
+        due: action.input.dueDate,
+        status: "A fazer",
+        priority: action.input.priority,
+        late: false,
+        hours: action.input.hours,
+      };
+      return {
+        ...state,
+        tasks: [t, ...state.tasks],
+        activityLog: [logFor(t.clientId, "tarefa", "Tarefa criada", t.title), ...state.activityLog],
+      };
+    }
+    case "UPDATE_CLIENT": {
+      const target = state.clients.find((c) => c.id === action.id);
+      if (!target) return state;
+      return {
+        ...state,
+        clients: state.clients.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)),
+        activityLog: [logFor(action.id, "solicitação", "Cadastro do cliente atualizado", `Campos alterados: ${Object.keys(action.patch).join(", ")}.`), ...state.activityLog],
+      };
+    }
+    case "CREATE_PROCESS": {
+      const steps = buildProcessSteps(action.input.department, action.input.assignee);
+      const p: Process = {
+        id: genId("proc"),
+        name: action.input.name,
+        clientId: action.input.clientId,
+        department: action.input.department,
+        progress: 0,
+        slaOk: true,
+        rework: 0,
+        cycleDays: 0,
+        steps,
+      };
+      return {
+        ...state,
+        processes: [p, ...state.processes],
+        activityLog: [logFor(action.input.clientId, "solicitação", "Processo criado", `${p.name} — ${action.input.department}, ${steps.length} etapa(s).`), ...state.activityLog],
+      };
+    }
+    case "UPDATE_PROCESS": {
+      return {
+        ...state,
+        processes: state.processes.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
+      };
+    }
+    case "CREATE_PROJECT": {
+      const p: Project = { id: genId("pj"), clientId: action.input.clientId, name: action.input.name, status: "Planejado", progress: 0, dueDate: action.input.dueDate };
+      return {
+        ...state,
+        projects: [p, ...state.projects],
+        activityLog: [logFor(action.input.clientId, "solicitação", "Projeto criado", `${p.name} · prazo ${p.dueDate}.`), ...state.activityLog],
+      };
+    }
+    case "UPDATE_PROJECT": {
+      const target = state.projects.find((p) => p.id === action.id);
+      if (!target) return state;
+      return {
+        ...state,
+        projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
+        activityLog: action.patch.status
+          ? [logFor(target.clientId, "solicitação", "Status do projeto alterado", `"${target.name}" agora é "${action.patch.status}".`), ...state.activityLog]
+          : state.activityLog,
+      };
+    }
+    case "CREATE_KNOWLEDGE_ARTICLE": {
+      const k: KnowledgeArticle = { id: genId("k"), category: action.input.category, title: action.input.title, summary: action.input.summary, content: action.input.content };
+      return { ...state, knowledgeArticles: [k, ...state.knowledgeArticles] };
+    }
+    case "UPDATE_KNOWLEDGE_ARTICLE": {
+      return {
+        ...state,
+        knowledgeArticles: state.knowledgeArticles.map((k) => (k.id === action.id ? { ...k, ...action.patch } : k)),
+      };
+    }
+    case "DELETE_KNOWLEDGE_ARTICLE":
+      return { ...state, knowledgeArticles: state.knowledgeArticles.filter((k) => k.id !== action.id) };
     default:
       return state;
   }
 }
 
-type DomainBootstrap = { tasks: Task[]; pendencies: Pendency[]; obligations: Obligation[] };
+type DomainBootstrap = {
+  tasks: Task[];
+  pendencies: Pendency[];
+  obligations: Obligation[];
+  clients: Client[];
+  processes: Process[];
+  projects: Project[];
+  knowledgeArticles: KnowledgeArticle[];
+  timelineEvents: TimelineEvent[];
+};
 
 function initialState(bootstrap: DomainBootstrap): StoreState {
   return {
@@ -854,10 +1013,14 @@ function initialState(bootstrap: DomainBootstrap): StoreState {
     documents: seedDocuments,
     obligations: bootstrap.obligations,
     automations: seedAutomations,
+    clients: bootstrap.clients,
+    processes: bootstrap.processes,
+    projects: bootstrap.projects,
+    knowledgeArticles: bootstrap.knowledgeArticles,
     insightStatus: {},
     alertStatus: {},
     churnReviewed: {},
-    activityLog: [],
+    activityLog: bootstrap.timelineEvents,
     capacityLog: [],
     liveInsights: [],
   };
@@ -926,6 +1089,15 @@ type OfficeStoreValue = StoreState & {
   createAutomation: (input: NewAutomationInput) => void;
   redistributeFromInsight: (insightId: string) => void;
   dismissLiveInsight: (id: string) => void;
+  createTask: (input: NewTaskInput) => void;
+  updateClient: (id: string, patch: Partial<ClientEditableFields>) => void;
+  createProcess: (input: NewProcessInput) => void;
+  updateProcess: (id: string, patch: Partial<Pick<Process, "progress" | "slaOk">>) => void;
+  createProject: (input: NewProjectInput) => void;
+  updateProject: (id: string, patch: Partial<Pick<Project, "status" | "progress" | "dueDate">>) => void;
+  createKnowledgeArticle: (input: NewKnowledgeArticleInput) => void;
+  updateKnowledgeArticle: (id: string, patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">>) => void;
+  deleteKnowledgeArticle: (id: string) => void;
   confirmAction: (options: ConfirmOptions) => void;
 };
 
@@ -983,9 +1155,19 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
   const persistTaskFn = useCallback((row: Task) => persistTask({ data: row }), []);
   const persistPendencyFn = useCallback((row: Pendency) => persistPendency({ data: row }), []);
   const persistObligationFn = useCallback((row: Obligation) => persistObligation({ data: row }), []);
+  const persistClientFn = useCallback((row: Client) => persistClient({ data: row }), []);
+  const persistProcessFn = useCallback((row: Process) => persistProcess({ data: row }), []);
+  const persistProjectFn = useCallback((row: Project) => persistProject({ data: row }), []);
+  const persistKnowledgeArticleFn = useCallback((row: KnowledgeArticle) => persistKnowledgeArticle({ data: row }), []);
+  const persistTimelineEventFn = useCallback((row: TimelineEvent) => persistTimelineEvent({ data: row }), []);
   useSyncEntities(state.tasks, persistTaskFn);
   useSyncEntities(state.pendencies, persistPendencyFn);
   useSyncEntities(state.obligations, persistObligationFn);
+  useSyncEntities(state.clients, persistClientFn);
+  useSyncEntities(state.processes, persistProcessFn);
+  useSyncEntities(state.projects, persistProjectFn);
+  useSyncEntities(state.knowledgeArticles, persistKnowledgeArticleFn);
+  useSyncEntities(state.activityLog, persistTimelineEventFn);
 
   const confirmAction = useCallback((options: ConfirmOptions) => {
     if (options.impact === "informativo") {
@@ -1036,6 +1218,18 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
       createAutomation: (input) => dispatch({ type: "CREATE_AUTOMATION", input }),
       redistributeFromInsight: (insightId) => dispatch({ type: "REDISTRIBUTE_FROM_INSIGHT", insightId }),
       dismissLiveInsight: (id) => dispatch({ type: "DISMISS_LIVE_INSIGHT", id }),
+      createTask: (input) => dispatch({ type: "CREATE_TASK", input }),
+      updateClient: (id, patch) => dispatch({ type: "UPDATE_CLIENT", id, patch }),
+      createProcess: (input) => dispatch({ type: "CREATE_PROCESS", input }),
+      updateProcess: (id, patch) => dispatch({ type: "UPDATE_PROCESS", id, patch }),
+      createProject: (input) => dispatch({ type: "CREATE_PROJECT", input }),
+      updateProject: (id, patch) => dispatch({ type: "UPDATE_PROJECT", id, patch }),
+      createKnowledgeArticle: (input) => dispatch({ type: "CREATE_KNOWLEDGE_ARTICLE", input }),
+      updateKnowledgeArticle: (id, patch) => dispatch({ type: "UPDATE_KNOWLEDGE_ARTICLE", id, patch }),
+      deleteKnowledgeArticle: (id) => {
+        dispatch({ type: "DELETE_KNOWLEDGE_ARTICLE", id });
+        void deleteKnowledgeArticleFn({ data: { id } }).catch(() => toast.error("Falha ao excluir artigo no banco — pode reaparecer depois de atualizar a página."));
+      },
       confirmAction,
     }),
     [state, confirmAction],

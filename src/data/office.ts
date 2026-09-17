@@ -864,42 +864,62 @@ export const monthlyRevenue = [
   { month: "Set", receita: 482340, margem: 27 },
 ];
 
-export const knowledgeArticles = [
+export type KnowledgeArticle = {
+  id: string;
+  category: string;
+  title: string;
+  summary: string;
+  content: string;
+};
+
+export const knowledgeArticles: KnowledgeArticle[] = [
   {
     id: "k1",
     category: "Processos",
     title: "Como fazemos o fechamento fiscal",
     summary: "Passo a passo do dia 1 ao dia 20, com checklist e responsáveis.",
+    content:
+      "1. Dias 1–5: coleta de documentos (notas fiscais, extratos, folha).\n2. Dias 6–10: conferência e conciliação bancária.\n3. Dias 11–15: apuração dos impostos e geração de guias.\n4. Dias 16–18: revisão cruzada por um segundo analista.\n5. Dias 19–20: envio das guias ao cliente e confirmação de pagamento.\n\nResponsável por etapa fica registrado no checklist da obrigação correspondente.",
   },
   {
     id: "k2",
     category: "Procedimentos",
     title: "Procedimento de onboarding de cliente",
     summary: "Coleta de documentos, migração de dados e reunião de kickoff.",
+    content:
+      "1. Enviar checklist de documentos iniciais (contrato social, procurações, certificados digitais).\n2. Migrar histórico contábil/fiscal do escritório anterior, quando houver.\n3. Cadastrar o cliente nos sistemas internos e definir responsável por departamento.\n4. Reunião de kickoff para alinhar expectativas, prazos e canais de comunicação.\n5. Primeiro fechamento acompanhado de perto para validar o processo.",
   },
   {
     id: "k3",
     category: "Políticas",
     title: "Política de reajuste de honorários",
     summary: "Gatilhos de reajuste: volume, funcionários, filiais e complexidade.",
+    content:
+      "Reajuste é avaliado quando pelo menos um destes gatilhos ocorre nos últimos 6 meses: crescimento de faturamento acima de 15%, aumento de quadro de funcionários, aumento de complexidade operacional (novas filiais, regimes ou serviços) ou defasagem do honorário frente ao custo real de atendimento. A proposta é sempre revisada pelo responsável comercial do cliente antes do envio.",
   },
   {
     id: "k4",
     category: "Treinamentos",
     title: "Treinamento: conferência sem retrabalho",
     summary: "Erros mais comuns e validações obrigatórias antes da revisão.",
+    content:
+      "Erros mais frequentes: lançamento em competência errada, divergência entre extrato e razão, guia gerada com CNPJ ou período incorretos. Antes de enviar para revisão, confirme: (1) saldo bancário bate com o extrato, (2) todas as notas do período foram lançadas, (3) checklist da obrigação está completo.",
   },
   {
     id: "k5",
     category: "FAQ",
     title: "Perguntas frequentes do cliente",
     summary: "Respostas padrão para dúvidas sobre guias, prazos e documentos.",
+    content:
+      "\"Quando a guia vence?\" — Consulte o prazo em Obrigações, sempre visível no Portal do Cliente.\n\"Por que o valor mudou?\" — Varia com o faturamento e as movimentações do período; detalhamento disponível mediante solicitação.\n\"Como envio documentos?\" — Pelo Portal do Cliente, na área \"O que precisamos de você\".",
   },
   {
     id: "k6",
     category: "Modelos",
     title: "Modelo de proposta comercial",
     summary: "Estrutura de escopo, precificação e condições comerciais.",
+    content:
+      "1. Escopo dos serviços contratados (referenciar o catálogo de serviços).\n2. Honorário mensal e forma de reajuste.\n3. Prazo de vigência e condições de renovação.\n4. Responsabilidades de cada parte (cliente x escritório).\n5. Assinatura e data de início.",
   },
 ];
 

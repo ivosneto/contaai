@@ -72,6 +72,106 @@ export type PendencyRow = {
   created_at: string;
 };
 
+export type ClientRow = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  cnpj: string;
+  segment: string;
+  regime: string;
+  revenue: number;
+  revenue_last_period: number;
+  headcount: number;
+  headcount_last_period: number;
+  fee: number;
+  fee_last_period: number;
+  cost: number;
+  owner: string;
+  department_id: string | null;
+  nps: number | null;
+  health: number;
+  status: string;
+  since: string;
+  overdue: number;
+  hours_month: number;
+  movements: number;
+  movements_last_period: number;
+  complexity: number;
+  complexity_last_period: number;
+  service_count_last_period: number;
+  fee_last_adjusted_at: string | null;
+  complaints_30d: number;
+  late_tasks: number;
+};
+
+export type ClientServiceRow = {
+  client_id: string;
+  service_id: string;
+};
+
+export type ServiceRow = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  category: string;
+  description: string;
+  default_fee: number;
+  default_hours: number;
+};
+
+export type ProcessRow = {
+  id: string;
+  workspace_id: string;
+  client_id: string;
+  name: string;
+  department_id: string | null;
+  progress: number;
+  sla_ok: boolean;
+  rework: number;
+  cycle_days: number;
+};
+
+export type ProcessStepRow = {
+  id: string;
+  process_id: string;
+  position: number;
+  name: string;
+  owner: string;
+  sla_days: number;
+  avg_days: number;
+  status: string;
+};
+
+export type ProjectRow = {
+  id: string;
+  workspace_id: string;
+  client_id: string;
+  name: string;
+  status: string;
+  progress: number;
+  due_date: string;
+};
+
+export type KnowledgeArticleRow = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  category: string;
+  summary: string;
+  content: string;
+  updated_at: string;
+};
+
+export type TimelineEventRow = {
+  id: string;
+  workspace_id: string;
+  client_id: string;
+  event_type: string;
+  title: string;
+  detail: string;
+  occurred_at: string;
+};
+
 type TableDef<Row> = { Row: Row; Insert: Partial<Row>; Update: Partial<Row>; Relationships: [] };
 
 export type DomainDatabase = {
@@ -83,6 +183,14 @@ export type DomainDatabase = {
       obligations: TableDef<ObligationRow>;
       obligation_checklist_items: TableDef<ObligationChecklistItemRow>;
       pendencies: TableDef<PendencyRow>;
+      clients: TableDef<ClientRow>;
+      client_services: TableDef<ClientServiceRow>;
+      services: TableDef<ServiceRow>;
+      processes: TableDef<ProcessRow>;
+      process_steps: TableDef<ProcessStepRow>;
+      projects: TableDef<ProjectRow>;
+      knowledge_articles: TableDef<KnowledgeArticleRow>;
+      timeline_events: TableDef<TimelineEventRow>;
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };
