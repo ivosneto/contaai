@@ -20,6 +20,13 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Segredos locais — nunca commitar (contém SUPABASE_SERVICE_ROLE_KEY)
+.env
+.env.*
+
+# Cache local do Supabase CLI
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -2,11 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -18,14 +21,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ContaAILogo } from "@/components/brand/logo";
 import {
   automations as seedAutomations,
   clientById,
   communications as seedCommunications,
   documents as seedDocuments,
   employees,
-  obligations as seedObligations,
-  pendencies as seedPendencies,
   processes,
   projects,
   tasks as seedTasks,
@@ -51,6 +53,16 @@ import { runDocumentPipeline } from "@/lib/documents-engine";
 import { classifyContent, summarize } from "@/lib/communication-engine";
 import { buildDepartmentCapacity, computeCapacityRecommendations, computeEmployeeCapacity } from "@/lib/capacity-engine";
 import type { Automation, AutomationMatch, AutomationRun } from "@/lib/automation-engine";
+import { fetchDomainBootstrap, persistObligation, persistPendency, persistTask } from "@/data/server-functions/domain";
+
+/**
+ * seedTasks (100 tarefas de src/data/office.ts) continua importado só como
+ * BASELINE fixa para o delta de capacidade (computeEmployeeCapacity) — não
+ * mais como estado inicial de `state.tasks`, que agora vem do Supabase (ver
+ * DomainBootstrap abaixo). Trocar a baseline pelas tarefas ao vivo zeraria o
+ * delta sempre (baseline === atual), quebrando a reatividade da capacidade
+ * — ver a mesma explicação em src/lib/capacity-engine.ts.
+ */
 
 /**
  * Estado compartilhado em memória (por sessão do navegador) para as entidades
@@ -832,13 +844,15 @@ function reducer(state: StoreState, action: Action): StoreState {
   }
 }
 
-function initialState(): StoreState {
+type DomainBootstrap = { tasks: Task[]; pendencies: Pendency[]; obligations: Obligation[] };
+
+function initialState(bootstrap: DomainBootstrap): StoreState {
   return {
-    pendencies: seedPendencies,
-    tasks: seedTasks,
+    pendencies: bootstrap.pendencies,
+    tasks: bootstrap.tasks,
     communications: seedCommunications,
     documents: seedDocuments,
-    obligations: seedObligations,
+    obligations: bootstrap.obligations,
     automations: seedAutomations,
     insightStatus: {},
     alertStatus: {},
@@ -847,6 +861,29 @@ function initialState(): StoreState {
     capacityLog: [],
     liveInsights: [],
   };
+}
+
+/**
+ * Write-through: sincroniza cada linha de `rows` com o Supabase assim que ela
+ * muda (criada ou editada por qualquer ação do reducer — manual, automação
+ * ou processamento de documento). O reducer continua síncrono e em memória
+ * (Action Engine intacto); isso só espelha o resultado no banco, por id, sem
+ * duplicar regra de negócio. Falha de rede vira toast — não falha silenciosa.
+ */
+function useSyncEntities<T extends { id: string }>(rows: T[], upsert: (row: T) => Promise<unknown>) {
+  const [lastSynced] = useState(() => new Map(rows.map((r) => [r.id, JSON.stringify(r)])));
+  const syncing = useRef(new Set<string>());
+  useEffect(() => {
+    for (const row of rows) {
+      const serialized = JSON.stringify(row);
+      if (lastSynced.get(row.id) === serialized || syncing.current.has(row.id)) continue;
+      syncing.current.add(row.id);
+      upsert(row)
+        .then(() => lastSynced.set(row.id, serialized))
+        .catch(() => toast.error("Falha ao salvar no banco — a alteração pode não persistir depois de atualizar a página."))
+        .finally(() => syncing.current.delete(row.id));
+    }
+  }, [rows, upsert, lastSynced]);
 }
 
 type ConfirmOptions = {
@@ -894,9 +931,61 @@ type OfficeStoreValue = StoreState & {
 
 const OfficeStoreContext = createContext<OfficeStoreValue | null>(null);
 
+/**
+ * Ponto de entrada público: carrega tasks/pendencies/obligations do Supabase
+ * (workspace demo, ver src/data/demo-workspace.ts) antes de montar o
+ * reducer. Clientes/funcionários/documentos/comunicações/automações
+ * continuam vindo de src/data/office.ts nesta fatia — ver o diagnóstico da
+ * tarefa para o que falta religar.
+ */
 export function OfficeStoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const bootstrap = useQuery({
+    queryKey: ["domain-bootstrap"],
+    queryFn: () => fetchDomainBootstrap(),
+    staleTime: Infinity,
+    retry: 1,
+  });
+
+  if (bootstrap.isPending) return <StoreBootstrapState />;
+  if (bootstrap.isError) {
+    return <StoreBootstrapState error={bootstrap.error instanceof Error ? bootstrap.error.message : "Erro desconhecido."} onRetry={() => void bootstrap.refetch()} />;
+  }
+
+  return <OfficeStoreProviderInner initial={bootstrap.data}>{children}</OfficeStoreProviderInner>;
+}
+
+function StoreBootstrapState({ error, onRetry }: { error?: string; onRetry?: () => void }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-background px-6">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <ContaAILogo variant="horizontal" size={36} />
+        {error ? (
+          <>
+            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar os dados do escritório no Supabase.<br />{error}</p>
+            {onRetry && (
+              <button onClick={onRetry} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+                Tentar novamente
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="animate-pulse text-sm text-muted-foreground">Carregando dados do escritório…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootstrap; children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initial, initialState);
   const [pending, setPending] = useState<ConfirmOptions | null>(null);
+
+  const persistTaskFn = useCallback((row: Task) => persistTask({ data: row }), []);
+  const persistPendencyFn = useCallback((row: Pendency) => persistPendency({ data: row }), []);
+  const persistObligationFn = useCallback((row: Obligation) => persistObligation({ data: row }), []);
+  useSyncEntities(state.tasks, persistTaskFn);
+  useSyncEntities(state.pendencies, persistPendencyFn);
+  useSyncEntities(state.obligations, persistObligationFn);
 
   const confirmAction = useCallback((options: ConfirmOptions) => {
     if (options.impact === "informativo") {
