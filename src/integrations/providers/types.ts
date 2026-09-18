@@ -27,10 +27,12 @@ export type IntegrationCategory =
   | "open-finance" // Open Finance
   | "governo"; // eSocial, SPED, Receita Federal
 
-export type IntegrationStatus = "mock" | "nao_configurado";
+/** "real" = tem OAuth/API de verdade implementada (ver src/lib/email/ + src/data/server-functions/email-integration.ts para o único caso hoje, e-mail) — o card correspondente na UI (integrations-page.tsx) mostra o status ao vivo em vez do badge "Mock" genérico. */
+export type IntegrationStatus = "mock" | "nao_configurado" | "real";
 
 /** O que a integração, quando real, alimentaria no ContaAI — documentação, não comportamento. */
-export type IntegrationFeeds = "documentos" | "comunicacao" | "obrigacoes" | "financeiro" | "comercial" | "tarefas";
+export type IntegrationFeeds =
+  "documentos" | "comunicacao" | "obrigacoes" | "financeiro" | "comercial" | "tarefas";
 
 export type IntegrationDefinition = {
   id: string;

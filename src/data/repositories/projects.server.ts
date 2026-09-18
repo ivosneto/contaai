@@ -1,4 +1,4 @@
-import { supabaseDomain } from "./domain-client.server";
+import type { DomainClient } from "./domain-client.server";
 import type { Project } from "@/data/office";
 import type { ProjectRow } from "./domain-types";
 
@@ -13,14 +13,14 @@ function fromRow(row: ProjectRow): Project {
   };
 }
 
-export async function listProjects(workspaceId: string): Promise<Project[]> {
-  const { data, error } = await supabaseDomain.from("projects").select("*").eq("workspace_id", workspaceId).order("due_date");
+export async function listProjects(client: DomainClient, workspaceId: string): Promise<Project[]> {
+  const { data, error } = await client.from("projects").select("*").eq("workspace_id", workspaceId).order("due_date");
   if (error) throw new Error(`Falha ao listar projetos: ${error.message}`);
   return (data ?? []).map(fromRow);
 }
 
-export async function upsertProject(workspaceId: string, project: Project): Promise<void> {
-  const { error } = await supabaseDomain.from("projects").upsert({
+export async function upsertProject(client: DomainClient, workspaceId: string, project: Project): Promise<void> {
+  const { error } = await client.from("projects").upsert({
     id: project.id,
     workspace_id: workspaceId,
     client_id: project.clientId,

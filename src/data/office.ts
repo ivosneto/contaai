@@ -1,7 +1,18 @@
 import { computeAlerts, computeInsights, type IntelligenceInput } from "@/lib/intelligence-engine";
-import { buildClientProfitability, buildProfitabilityDashboard, computeProfitabilityInsights } from "@/lib/profitability-engine";
-import { computeRevenueOpportunities, computeRevenueOpportunityInsights } from "@/lib/revenue-intelligence-engine";
-import { computeChurnInsights, computeChurnRisks, computeHealthScores } from "@/lib/health-score-engine";
+import {
+  buildClientProfitability,
+  buildProfitabilityDashboard,
+  computeProfitabilityInsights,
+} from "@/lib/profitability-engine";
+import {
+  computeRevenueOpportunities,
+  computeRevenueOpportunityInsights,
+} from "@/lib/revenue-intelligence-engine";
+import {
+  computeChurnInsights,
+  computeChurnRisks,
+  computeHealthScores,
+} from "@/lib/health-score-engine";
 import {
   buildDepartmentCapacity,
   buildOfficeCapacityOverview,
@@ -10,9 +21,17 @@ import {
   computeCapacityRecommendations,
   computeEmployeeCapacity,
 } from "@/lib/capacity-engine";
-import { buildChecklist, computeObligationInsights, OBLIGATION_DEPARTMENT } from "@/lib/obligations-engine";
+import {
+  buildChecklist,
+  computeObligationInsights,
+  OBLIGATION_DEPARTMENT,
+} from "@/lib/obligations-engine";
 import { DOCUMENT_DEFAULT_CATEGORY, runDocumentPipeline } from "@/lib/documents-engine";
-import { classifyContent, computeCommunicationInsights, summarize } from "@/lib/communication-engine";
+import {
+  classifyContent,
+  computeCommunicationInsights,
+  summarize,
+} from "@/lib/communication-engine";
 import {
   classifyMrrMovements,
   computeAccountsPaid,
@@ -35,20 +54,57 @@ import {
 } from "@/lib/automation-engine";
 
 export type Department =
-  | "Fiscal"
-  | "Contábil"
-  | "Pessoal"
-  | "Societário"
-  | "Financeiro"
-  | "Comercial";
+  "Fiscal" | "Contábil" | "Pessoal" | "Societário" | "Financeiro" | "Comercial";
 
 export const serviceCatalog = [
-  { id: "svc-contabil", name: "Contábil", category: "Recorrente", description: "Escrituração contábil mensal, balancetes e demonstrações.", defaultFee: 900, defaultHours: 6 },
-  { id: "svc-fiscal", name: "Fiscal", category: "Recorrente", description: "Apuração de impostos e obrigações acessórias.", defaultFee: 1100, defaultHours: 8 },
-  { id: "svc-pessoal", name: "Pessoal", category: "Recorrente", description: "Folha de pagamento e departamento pessoal.", defaultFee: 850, defaultHours: 5 },
-  { id: "svc-bpo", name: "BPO", category: "Recorrente", description: "BPO financeiro: contas a pagar, a receber e conciliação.", defaultFee: 1800, defaultHours: 10 },
-  { id: "svc-societario", name: "Societário", category: "Pontual", description: "Alterações contratuais, abertura e encerramento de empresas.", defaultFee: 650, defaultHours: 4 },
-  { id: "svc-consultoria", name: "Consultoria", category: "Pontual", description: "Consultoria tributária e planejamento financeiro.", defaultFee: 1400, defaultHours: 6 },
+  {
+    id: "svc-contabil",
+    name: "Contábil",
+    category: "Recorrente",
+    description: "Escrituração contábil mensal, balancetes e demonstrações.",
+    defaultFee: 900,
+    defaultHours: 6,
+  },
+  {
+    id: "svc-fiscal",
+    name: "Fiscal",
+    category: "Recorrente",
+    description: "Apuração de impostos e obrigações acessórias.",
+    defaultFee: 1100,
+    defaultHours: 8,
+  },
+  {
+    id: "svc-pessoal",
+    name: "Pessoal",
+    category: "Recorrente",
+    description: "Folha de pagamento e departamento pessoal.",
+    defaultFee: 850,
+    defaultHours: 5,
+  },
+  {
+    id: "svc-bpo",
+    name: "BPO",
+    category: "Recorrente",
+    description: "BPO financeiro: contas a pagar, a receber e conciliação.",
+    defaultFee: 1800,
+    defaultHours: 10,
+  },
+  {
+    id: "svc-societario",
+    name: "Societário",
+    category: "Pontual",
+    description: "Alterações contratuais, abertura e encerramento de empresas.",
+    defaultFee: 650,
+    defaultHours: 4,
+  },
+  {
+    id: "svc-consultoria",
+    name: "Consultoria",
+    category: "Pontual",
+    description: "Consultoria tributária e planejamento financeiro.",
+    defaultFee: 1400,
+    defaultHours: 6,
+  },
 ] as const;
 
 /** Catálogo de serviços contratáveis — fonte única do nome dos serviços em todo o app. */
@@ -57,11 +113,7 @@ export type ServiceName = Service["name"];
 export type ServiceCategory = Service["category"];
 
 export type ClientStatus =
-  | "Ativo"
-  | "Em onboarding"
-  | "Em risco"
-  | "Inadimplente"
-  | "Sem atividade";
+  "Ativo" | "Em onboarding" | "Em risco" | "Inadimplente" | "Sem atividade";
 
 export type Client = {
   id: string;
@@ -120,14 +172,7 @@ export type Opportunity = {
   mrr: number;
   setup: number;
   probability: number;
-  stage:
-    | "Lead"
-    | "Diagnóstico"
-    | "Proposta"
-    | "Negociação"
-    | "Fechado"
-    | "Perdido"
-    | "Onboarding";
+  stage: "Lead" | "Diagnóstico" | "Proposta" | "Negociação" | "Fechado" | "Perdido" | "Onboarding";
   expectedAt: string;
   competitor?: string;
   lossReason?: string;
@@ -271,13 +316,36 @@ export type DocumentPipelineStage =
   | "Verificação da obrigação"
   | "Concluído";
 
-export type DocumentStatus = "Pendente" | "Recebido" | "Processando" | "Aprovado" | "Vencido" | "Rejeitado";
+export type DocumentStatus =
+  "Pendente" | "Recebido" | "Processando" | "Aprovado" | "Vencido" | "Rejeitado";
+
+/** Confiança (0-100) por campo — só presente quando o provider de IA reporta; nunca inventada para um campo que ele não relatou. */
+export type ExtractedFieldConfidence = Partial<
+  Record<
+    | "cnpj"
+    | "razaoSocial"
+    | "tipoDetectado"
+    | "numero"
+    | "valor"
+    | "vencimento"
+    | "competencia"
+    | "fornecedor"
+    | "categoria",
+    number
+  >
+>;
 
 /**
- * Dados "extraídos" por OCR — SIMULADO. Não há integração real com um motor
- * de OCR: os valores são gerados deterministicamente a partir do próprio
- * documento para demonstrar o fluxo Identificação → Classificação →
- * Extração → Validação. Ver DEMO_DISCLAIMER em documents-engine.ts.
+ * Dados extraídos de um documento. Os campos abaixo do comentário "novo,
+ * aditivo" só existem quando um OCR real (`source: "gemini"`) rodou — a
+ * extração simulada de fallback (`source: "mock"`, ver documents-engine.ts)
+ * nunca os preenche, e documentos de seed anteriores a esta tarefa não têm
+ * `source` nenhum (tratar como mock). cnpj/competencia/numero/categoria/
+ * tipoDetectado/valor/vencimento/confidence continuam obrigatórios por
+ * compatibilidade com o painel e com validateExtraction já existentes —
+ * quando um OCR real não encontra o campo no documento, ele fica string
+ * vazia/null (nunca um valor inventado), e `needsReview`/`fieldConfidence`
+ * sinalizam a ausência.
  */
 export type DocumentExtraction = {
   tipoDetectado: DocumentType;
@@ -287,7 +355,13 @@ export type DocumentExtraction = {
   vencimento: string | null;
   numero: string;
   categoria: PendencyCategory;
-  confidence: number; // 0-100, simulado
+  confidence: number; // 0-100
+  // novo, aditivo — OCR real (ver src/data/server-functions/document-intelligence.ts)
+  razaoSocial?: string | null;
+  fornecedor?: string | null;
+  fieldConfidence?: ExtractedFieldConfidence;
+  source?: "gemini" | "mock";
+  needsReview?: boolean;
 };
 
 export type ClientDocument = {
@@ -304,10 +378,14 @@ export type ClientDocument = {
   extraction: DocumentExtraction | null;
   linkedObligationId: string | null;
   linkedPendencyId: string | null;
+  /** Caminho no Supabase Storage (bucket "documents") — null para os documentos de demonstração (sem arquivo real) e para qualquer um enviado antes desta tarefa; documentos enviados pelo fluxo real de upload sempre têm um caminho. */
+  storagePath: string | null;
 };
 
-export type ObligationType = "DAS" | "SPED Fiscal" | "SPED Contribuições" | "eSocial" | "DCTFWeb" | "GFIP" | "DIRF" | "ECF";
-export type ObligationStatus = "Pendente" | "Em andamento" | "Aguardando cliente" | "Concluída" | "Atrasada";
+export type ObligationType =
+  "DAS" | "SPED Fiscal" | "SPED Contribuições" | "eSocial" | "DCTFWeb" | "GFIP" | "DIRF" | "ECF";
+export type ObligationStatus =
+  "Pendente" | "Em andamento" | "Aguardando cliente" | "Concluída" | "Atrasada";
 export type ObligationPriority = "Baixa" | "Média" | "Alta" | "Crítica";
 
 export type ChecklistItem = { id: string; label: string; done: boolean };
@@ -456,11 +534,13 @@ export type CommunicationClassification =
   | "Outros";
 export type CommunicationSentiment = "Positivo" | "Neutro" | "Negativo";
 export type CommunicationPriority = "Baixa" | "Média" | "Alta" | "Crítica";
-export type CommunicationStatus = "Novo" | "Em andamento" | "Aguardando cliente" | "Respondida" | "Resolvida";
+export type CommunicationStatus =
+  "Novo" | "Em andamento" | "Aguardando cliente" | "Respondida" | "Resolvida";
 
 export type Communication = {
   id: string;
-  clientId: string;
+  /** null = ainda não identificado a nenhum cliente (baixa confiança no matching automático) — precisa de triagem manual. Ver src/lib/email/client-matching.ts. */
+  clientId: string | null;
   threadId: string;
   sender: string;
   channel: CommunicationChannel;
@@ -569,13 +649,7 @@ const names = [
   "Sertão Energia",
 ];
 
-const owners = [
-  "Ana Beatriz",
-  "Carlos Menezes",
-  "Fernanda Dias",
-  "Rafael Torres",
-  "Juliana Alves",
-];
+const owners = ["Ana Beatriz", "Carlos Menezes", "Fernanda Dias", "Rafael Torres", "Juliana Alves"];
 
 const allServices: ServiceName[] = serviceCatalog.map((s) => s.name);
 
@@ -595,15 +669,8 @@ function shiftDate(base: string, days: number): string {
 }
 
 export const clients: Client[] = names.map((name, i) => {
-  const regimes = [
-    "Simples Nacional",
-    "Lucro Presumido",
-    "Lucro Real",
-    "MEI",
-  ] as const;
-  const services = allServices.filter(
-    (_, s) => (seeded(i + s * 3, 10) > 3 && s < 4) || s === 0,
-  );
+  const regimes = ["Simples Nacional", "Lucro Presumido", "Lucro Real", "MEI"] as const;
+  const services = allServices.filter((_, s) => (seeded(i + s * 3, 10) > 3 && s < 4) || s === 0);
   const fee = 900 + seeded(i, 9) * 420;
   const costRatio = at([0.42, 0.55, 0.68, 0.81, 1.12], seeded(i, 5));
   const cost = Math.round(fee * costRatio);
@@ -707,18 +774,18 @@ export const employees: Employee[] = [
       : 1;
   const monthlyCost = Math.round((3200 + seeded(i, 24) * 220) * seniorityMultiplier);
   return {
-  id: `e${i + 1}`,
-  name: name as string,
-  role: roleText,
-  department: department as Department,
-  manager: i < 3 ? "Renata Barros" : i < 6 ? "Pedro Lima" : "Camila Nunes",
-  capacity: capacity as number,
-  allocated: allocated as number,
-  monthlyCost,
-  costPerHour: Math.round(monthlyCost / (capacity as number)),
-  productivity: 72 + seeded(i, 26),
-  sla: 82 + seeded(i, 17),
-  rework: 2 + seeded(i, 14),
+    id: `e${i + 1}`,
+    name: name as string,
+    role: roleText,
+    department: department as Department,
+    manager: i < 3 ? "Renata Barros" : i < 6 ? "Pedro Lima" : "Camila Nunes",
+    capacity: capacity as number,
+    allocated: allocated as number,
+    monthlyCost,
+    costPerHour: Math.round(monthlyCost / (capacity as number)),
+    productivity: 72 + seeded(i, 26),
+    sla: 82 + seeded(i, 17),
+    rework: 2 + seeded(i, 14),
   };
 });
 
@@ -911,7 +978,7 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     title: "Perguntas frequentes do cliente",
     summary: "Respostas padrão para dúvidas sobre guias, prazos e documentos.",
     content:
-      "\"Quando a guia vence?\" — Consulte o prazo em Obrigações, sempre visível no Portal do Cliente.\n\"Por que o valor mudou?\" — Varia com o faturamento e as movimentações do período; detalhamento disponível mediante solicitação.\n\"Como envio documentos?\" — Pelo Portal do Cliente, na área \"O que precisamos de você\".",
+      '"Quando a guia vence?" — Consulte o prazo em Obrigações, sempre visível no Portal do Cliente.\n"Por que o valor mudou?" — Varia com o faturamento e as movimentações do período; detalhamento disponível mediante solicitação.\n"Como envio documentos?" — Pelo Portal do Cliente, na área "O que precisamos de você".',
   },
   {
     id: "k6",
@@ -1050,7 +1117,8 @@ export function clientMargin(c: Client) {
   return Math.round(((c.fee - c.cost) / c.fee) * 1000) / 10;
 }
 
-export function clientById(id: string) {
+export function clientById(id: string | null | undefined) {
+  if (!id) return undefined;
   return clients.find((c) => c.id === id);
 }
 
@@ -1086,7 +1154,13 @@ function inferRole(roleTitle: string): AppRole {
 }
 
 export const users: User[] = [
-  { id: "u1", fullName: "Matheus Lapenda", email: "matheus@lapenda.cnt.br", role: "owner", avatarInitial: "M" },
+  {
+    id: "u1",
+    fullName: "Matheus Lapenda",
+    email: "matheus@lapenda.cnt.br",
+    role: "owner",
+    avatarInitial: "M",
+  },
   ...employees.map((e, i) => ({
     id: `u${i + 2}`,
     fullName: e.name,
@@ -1109,8 +1183,26 @@ export const users: User[] = [
 // Dados de demonstração: não há integração real com eSocial, SPED, DCTFWeb
 // ou qualquer sistema da Receita Federal. Ver src/lib/obligations-engine.ts.
 
-const obligationTypes: ObligationType[] = ["DAS", "SPED Fiscal", "SPED Contribuições", "eSocial", "DCTFWeb", "GFIP", "DIRF", "ECF"];
-const municipalities = ["Fortaleza", "São Paulo", "Rio de Janeiro", "Belo Horizonte", "Recife", "Salvador", "Curitiba", "Porto Alegre"];
+const obligationTypes: ObligationType[] = [
+  "DAS",
+  "SPED Fiscal",
+  "SPED Contribuições",
+  "eSocial",
+  "DCTFWeb",
+  "GFIP",
+  "DIRF",
+  "ECF",
+];
+const municipalities = [
+  "Fortaleza",
+  "São Paulo",
+  "Rio de Janeiro",
+  "Belo Horizonte",
+  "Recife",
+  "Salvador",
+  "Curitiba",
+  "Porto Alegre",
+];
 
 export const obligations: Obligation[] = Array.from({ length: 40 }, (_, i) => {
   const client = at(clients, i);
@@ -1125,7 +1217,14 @@ export const obligations: Obligation[] = Array.from({ length: 40 }, (_, i) => {
         ? "Atrasada"
         : "Concluída"
       : at(["Pendente", "Em andamento", "Aguardando cliente"] as const, seeded(i, 3));
-  const doneCount = status === "Concluída" ? 4 : status === "Em andamento" ? 2 : status === "Aguardando cliente" ? 1 : 0;
+  const doneCount =
+    status === "Concluída"
+      ? 4
+      : status === "Em andamento"
+        ? 2
+        : status === "Aguardando cliente"
+          ? 1
+          : 0;
 
   return {
     id: `ob${i + 1}`,
@@ -1138,7 +1237,8 @@ export const obligations: Obligation[] = Array.from({ length: 40 }, (_, i) => {
     municipality: at(municipalities, seeded(clientIndex, municipalities.length)),
     assignee: at(employees, i % employees.length).name,
     status,
-    priority: status === "Atrasada" ? "Crítica" : at(["Baixa", "Média", "Alta"] as const, seeded(i, 3)),
+    priority:
+      status === "Atrasada" ? "Crítica" : at(["Baixa", "Média", "Alta"] as const, seeded(i, 3)),
     evidenceDocumentId: null,
     checklist: buildChecklist(type, doneCount),
   };
@@ -1198,17 +1298,38 @@ const OBLIGATION_TO_DOCUMENT_TYPE: Partial<Record<ObligationType, DocumentType>>
 export const documents: ClientDocument[] = Array.from({ length: 28 }, (_, i) => {
   const useObligationBasis = i % 2 === 0;
   const basisObligation = useObligationBasis ? at(obligations, i) : null;
-  const client = basisObligation ? (clientById(basisObligation.clientId) ?? at(clients, i)) : at(clients, i);
-  const type = basisObligation ? (OBLIGATION_TO_DOCUMENT_TYPE[basisObligation.type] ?? at(documentTypes, i)) : at(documentTypes, i);
+  const client = basisObligation
+    ? (clientById(basisObligation.clientId) ?? at(clients, i))
+    : at(clients, i);
+  const type = basisObligation
+    ? (OBLIGATION_TO_DOCUMENT_TYPE[basisObligation.type] ?? at(documentTypes, i))
+    : at(documentTypes, i);
   const category = DOCUMENT_DEFAULT_CATEGORY[type];
   const competence = basisObligation?.competence ?? (i % 5 === 0 ? "2026-08" : "2026-09");
   const uploadedAt = `2026-09-${String(1 + (i % 28)).padStart(2, "0")}`;
   const assignee = at(employees, i % employees.length).name;
-  const base = { id: `doc${i + 1}`, clientId: client.id, name: `${type} — ${client.name}`, type, category, competence, assignee, uploadedAt };
+  const base = {
+    id: `doc${i + 1}`,
+    clientId: client.id,
+    name: `${type} — ${client.name}`,
+    type,
+    category,
+    competence,
+    assignee,
+    uploadedAt,
+  };
 
   const alreadyProcessed = seeded(i, 2) === 0;
   if (!alreadyProcessed) {
-    return { ...base, status: "Recebido" as const, pipelineStage: "Recebido" as const, extraction: null, linkedObligationId: null, linkedPendencyId: null };
+    return {
+      ...base,
+      status: "Recebido" as const,
+      pipelineStage: "Recebido" as const,
+      extraction: null,
+      linkedObligationId: null,
+      linkedPendencyId: null,
+      storagePath: null,
+    };
   }
 
   const result = runDocumentPipeline({ type, category, competence }, client, obligations, i);
@@ -1219,6 +1340,7 @@ export const documents: ClientDocument[] = Array.from({ length: 28 }, (_, i) => 
     extraction: result.extraction,
     linkedObligationId: result.matchedObligation?.id ?? null,
     linkedPendencyId: null,
+    storagePath: null,
   };
 });
 
@@ -1236,14 +1358,54 @@ const pendencyLibrary: {
   description: string;
   recommendedAction: string;
 }[] = [
-  { category: "Documento", title: "Enviar extratos bancários do mês", description: "Cliente ainda não enviou os extratos para conciliação.", recommendedAction: "Enviar lembrete automático ao cliente." },
-  { category: "Fiscal", title: "Apurar impostos do período", description: "Apuração pendente antes do vencimento da guia.", recommendedAction: "Priorizar apuração com o responsável do Fiscal." },
-  { category: "Contábil", title: "Conciliar lançamentos do mês", description: "Divergência entre extrato bancário e lançamentos contábeis.", recommendedAction: "Revisar lançamentos com o analista contábil." },
-  { category: "Folha", title: "Confirmar admissões e desligamentos", description: "Folha aguardando confirmação de movimentações de pessoal.", recommendedAction: "Solicitar confirmação ao RH do cliente." },
-  { category: "Financeiro", title: "Negociar honorário em atraso", description: "Fatura vencida sem retorno do cliente.", recommendedAction: "Acionar régua de cobrança." },
-  { category: "Comercial", title: "Enviar proposta de reajuste", description: "Cliente elegível a reajuste sem proposta enviada.", recommendedAction: "Gerar e enviar proposta comercial." },
-  { category: "Cliente", title: "Retornar contato do cliente", description: "Cliente aguarda retorno há mais de 3 dias.", recommendedAction: "Agendar reunião de relacionamento." },
-  { category: "Interna", title: "Revisar checklist de fechamento", description: "Checklist interno do fechamento mensal incompleto.", recommendedAction: "Concluir checklist antes da entrega." },
+  {
+    category: "Documento",
+    title: "Enviar extratos bancários do mês",
+    description: "Cliente ainda não enviou os extratos para conciliação.",
+    recommendedAction: "Enviar lembrete automático ao cliente.",
+  },
+  {
+    category: "Fiscal",
+    title: "Apurar impostos do período",
+    description: "Apuração pendente antes do vencimento da guia.",
+    recommendedAction: "Priorizar apuração com o responsável do Fiscal.",
+  },
+  {
+    category: "Contábil",
+    title: "Conciliar lançamentos do mês",
+    description: "Divergência entre extrato bancário e lançamentos contábeis.",
+    recommendedAction: "Revisar lançamentos com o analista contábil.",
+  },
+  {
+    category: "Folha",
+    title: "Confirmar admissões e desligamentos",
+    description: "Folha aguardando confirmação de movimentações de pessoal.",
+    recommendedAction: "Solicitar confirmação ao RH do cliente.",
+  },
+  {
+    category: "Financeiro",
+    title: "Negociar honorário em atraso",
+    description: "Fatura vencida sem retorno do cliente.",
+    recommendedAction: "Acionar régua de cobrança.",
+  },
+  {
+    category: "Comercial",
+    title: "Enviar proposta de reajuste",
+    description: "Cliente elegível a reajuste sem proposta enviada.",
+    recommendedAction: "Gerar e enviar proposta comercial.",
+  },
+  {
+    category: "Cliente",
+    title: "Retornar contato do cliente",
+    description: "Cliente aguarda retorno há mais de 3 dias.",
+    recommendedAction: "Agendar reunião de relacionamento.",
+  },
+  {
+    category: "Interna",
+    title: "Revisar checklist de fechamento",
+    description: "Checklist interno do fechamento mensal incompleto.",
+    recommendedAction: "Concluir checklist antes da entrega.",
+  },
 ];
 
 export const pendencies: Pendency[] = Array.from({ length: 26 }, (_, i) => {
@@ -1252,7 +1414,10 @@ export const pendencies: Pendency[] = Array.from({ length: 26 }, (_, i) => {
   // para um cliente que não tem, de fato, nenhuma fatura vencida — mantém a
   // pendência coerente com `client.overdue` (usado também no Portal do Cliente).
   const candidate = at(pendencyLibrary, i);
-  const lib = candidate.category === "Financeiro" && client.overdue === 0 ? at(pendencyLibrary, pendencyLibrary.length - 1) : candidate;
+  const lib =
+    candidate.category === "Financeiro" && client.overdue === 0
+      ? at(pendencyLibrary, pendencyLibrary.length - 1)
+      : candidate;
   const dueDate = shiftDate("2026-09-14", seeded(i, 20) - 10);
   const createdAt = shiftDate(dueDate, -(3 + seeded(i, 6)));
   return {
@@ -1266,7 +1431,10 @@ export const pendencies: Pendency[] = Array.from({ length: 26 }, (_, i) => {
     priority: at(["Baixa", "Média", "Alta", "Crítica"] as const, seeded(i, 4)),
     slaHours: at([4, 8, 24, 48, 72], seeded(i, 5)),
     dueDate,
-    status: at(["Aberta", "Em andamento", "Aberta", "Em andamento", "Concluída", "Cancelada"] as const, seeded(i, 11)),
+    status: at(
+      ["Aberta", "Em andamento", "Aberta", "Em andamento", "Concluída", "Cancelada"] as const,
+      seeded(i, 11),
+    ),
     createdAt,
     recommendedAction: lib.recommendedAction,
   };
@@ -1300,33 +1468,112 @@ export const projects: Project[] = Array.from({ length: 12 }, (_, i) => {
 // determinísticas a partir do próprio conteúdo da mensagem, não hardcoded.
 
 const messageLibrary: { content: string; subject: string; channel: CommunicationChannel }[] = [
-  { content: "Preciso enviar os documentos do fechamento.", subject: "Documentos do fechamento", channel: "WhatsApp" },
-  { content: "Bom dia! Poderiam confirmar o valor da guia do DAS deste mês?", subject: "Dúvida sobre guia do DAS", channel: "E-mail" },
-  { content: "A guia veio com o valor errado, isso já é a segunda vez que acontece.", subject: "Guia com valor errado", channel: "WhatsApp" },
-  { content: "O boleto do mês passado ainda não foi baixado, podem verificar?", subject: "Boleto não baixado", channel: "E-mail" },
-  { content: "Gostaria de saber mais sobre contratar o serviço de BPO financeiro para minha empresa.", subject: "Interesse em BPO financeiro", channel: "Portal" },
-  { content: "Isso é urgente, preciso de retorno hoje mesmo sobre a rescisão do funcionário.", subject: "Urgente: rescisão de funcionário", channel: "WhatsApp" },
-  { content: "Segue em anexo o extrato bancário de agosto.", subject: "Extrato bancário — agosto", channel: "E-mail" },
-  { content: "Muito obrigado pelo atendimento, ficou tudo certo!", subject: "Agradecimento", channel: "WhatsApp" },
-  { content: "Poderiam me explicar como funciona o cálculo do Simples Nacional?", subject: "Dúvida sobre Simples Nacional", channel: "Portal" },
-  { content: "Precisamos negociar o boleto vencido do mês passado.", subject: "Negociação de boleto vencido", channel: "E-mail" },
-  { content: "Equipe, revisar o checklist do fechamento deste cliente antes de enviar.", subject: "Checklist do fechamento", channel: "Mensagem interna" },
-  { content: "Gostaria de solicitar a segunda via do contrato social.", subject: "Segunda via do contrato social", channel: "Portal" },
-  { content: "Reclamação: o suporte demorou 3 dias para responder minha última mensagem.", subject: "Demora no suporte", channel: "E-mail" },
-  { content: "Podem enviar a guia de FGTS deste mês assim que possível?", subject: "Guia de FGTS", channel: "WhatsApp" },
-  { content: "Favor confirmar o recebimento das notas fiscais enviadas ontem.", subject: "Confirmação de recebimento", channel: "E-mail" },
-  { content: "Ficamos com uma dúvida sobre o relatório gerencial, poderia explicar a variação de custos?", subject: "Dúvida sobre relatório gerencial", channel: "Portal" },
-  { content: "Equipe, cliente sinalizou interesse em consultoria tributária — avaliar oportunidade.", subject: "Oportunidade de consultoria", channel: "Mensagem interna" },
-  { content: "Preciso enviar os documentos do fechamento, mas só consigo até sexta-feira.", subject: "Documentos do fechamento — prazo", channel: "Portal" },
+  {
+    content: "Preciso enviar os documentos do fechamento.",
+    subject: "Documentos do fechamento",
+    channel: "WhatsApp",
+  },
+  {
+    content: "Bom dia! Poderiam confirmar o valor da guia do DAS deste mês?",
+    subject: "Dúvida sobre guia do DAS",
+    channel: "E-mail",
+  },
+  {
+    content: "A guia veio com o valor errado, isso já é a segunda vez que acontece.",
+    subject: "Guia com valor errado",
+    channel: "WhatsApp",
+  },
+  {
+    content: "O boleto do mês passado ainda não foi baixado, podem verificar?",
+    subject: "Boleto não baixado",
+    channel: "E-mail",
+  },
+  {
+    content:
+      "Gostaria de saber mais sobre contratar o serviço de BPO financeiro para minha empresa.",
+    subject: "Interesse em BPO financeiro",
+    channel: "Portal",
+  },
+  {
+    content: "Isso é urgente, preciso de retorno hoje mesmo sobre a rescisão do funcionário.",
+    subject: "Urgente: rescisão de funcionário",
+    channel: "WhatsApp",
+  },
+  {
+    content: "Segue em anexo o extrato bancário de agosto.",
+    subject: "Extrato bancário — agosto",
+    channel: "E-mail",
+  },
+  {
+    content: "Muito obrigado pelo atendimento, ficou tudo certo!",
+    subject: "Agradecimento",
+    channel: "WhatsApp",
+  },
+  {
+    content: "Poderiam me explicar como funciona o cálculo do Simples Nacional?",
+    subject: "Dúvida sobre Simples Nacional",
+    channel: "Portal",
+  },
+  {
+    content: "Precisamos negociar o boleto vencido do mês passado.",
+    subject: "Negociação de boleto vencido",
+    channel: "E-mail",
+  },
+  {
+    content: "Equipe, revisar o checklist do fechamento deste cliente antes de enviar.",
+    subject: "Checklist do fechamento",
+    channel: "Mensagem interna",
+  },
+  {
+    content: "Gostaria de solicitar a segunda via do contrato social.",
+    subject: "Segunda via do contrato social",
+    channel: "Portal",
+  },
+  {
+    content: "Reclamação: o suporte demorou 3 dias para responder minha última mensagem.",
+    subject: "Demora no suporte",
+    channel: "E-mail",
+  },
+  {
+    content: "Podem enviar a guia de FGTS deste mês assim que possível?",
+    subject: "Guia de FGTS",
+    channel: "WhatsApp",
+  },
+  {
+    content: "Favor confirmar o recebimento das notas fiscais enviadas ontem.",
+    subject: "Confirmação de recebimento",
+    channel: "E-mail",
+  },
+  {
+    content:
+      "Ficamos com uma dúvida sobre o relatório gerencial, poderia explicar a variação de custos?",
+    subject: "Dúvida sobre relatório gerencial",
+    channel: "Portal",
+  },
+  {
+    content:
+      "Equipe, cliente sinalizou interesse em consultoria tributária — avaliar oportunidade.",
+    subject: "Oportunidade de consultoria",
+    channel: "Mensagem interna",
+  },
+  {
+    content: "Preciso enviar os documentos do fechamento, mas só consigo até sexta-feira.",
+    subject: "Documentos do fechamento — prazo",
+    channel: "Portal",
+  },
 ];
 
 export const communications: Communication[] = messageLibrary.map((lib, i) => {
   const client = at(clients, i);
   const classification = classifyContent(lib.content);
-  const direction: CommunicationDirection = lib.channel === "Mensagem interna" ? "Enviada" : seeded(i, 5) === 0 ? "Enviada" : "Recebida";
+  const direction: CommunicationDirection =
+    lib.channel === "Mensagem interna" ? "Enviada" : seeded(i, 5) === 0 ? "Enviada" : "Recebida";
   const sender = direction === "Enviada" ? at(employees, i % employees.length).name : client.owner;
   const assignee = at(employees, (i + 3) % employees.length).name;
-  const status = at(["Novo", "Em andamento", "Aguardando cliente", "Respondida", "Resolvida"] as const, seeded(i, 5));
+  const status = at(
+    ["Novo", "Em andamento", "Aguardando cliente", "Respondida", "Resolvida"] as const,
+    seeded(i, 5),
+  );
 
   return {
     id: `cm${i + 1}`,
@@ -1344,7 +1591,8 @@ export const communications: Communication[] = messageLibrary.map((lib, i) => {
     classification: classification.category,
     assignee,
     status,
-    requiresAction: classification.requiresAction && status !== "Resolvida" && status !== "Respondida",
+    requiresAction:
+      classification.requiresAction && status !== "Resolvida" && status !== "Respondida",
     suggestedAction: classification.suggestedAction,
   };
 });
@@ -1356,7 +1604,8 @@ export const financialAccounts: FinancialAccount[] = [
 ];
 
 export const invoices: Invoice[] = clients.map((client, i) => {
-  const status: InvoiceStatus = client.overdue > 0 ? "Vencida" : seeded(i, 8) === 0 ? "Pendente" : "Paga";
+  const status: InvoiceStatus =
+    client.overdue > 0 ? "Vencida" : seeded(i, 8) === 0 ? "Pendente" : "Paga";
   return {
     id: `inv-${client.id}-2026-09`,
     clientId: client.id,
@@ -1429,7 +1678,10 @@ export const contacts: Contact[] = clients.flatMap((client, ci) =>
   [0, 1].map((i) => ({
     id: `ct-${client.id}-${i}`,
     clientId: client.id,
-    name: i === 0 ? client.owner : at(["Sr. Almeida", "Dra. Peixoto", "Marcos T.", "Helena R.", "Igor S."], ci + i),
+    name:
+      i === 0
+        ? client.owner
+        : at(["Sr. Almeida", "Dra. Peixoto", "Marcos T.", "Helena R.", "Igor S."], ci + i),
     role: i === 0 ? "Sócio(a)" : at(contactRoles, ci + i),
     email: `contato${i + 1}@${client.id}.contaai.app`,
     phone: `(85) 9${8000 + ci * 37 + i}-${1000 + ci * 13}`,
@@ -1443,19 +1695,34 @@ export const contracts: Contract[] = clients.map((client, i) => ({
   services: client.services,
   value: client.fee,
   startDate: client.since,
-  renewalDate: shiftDate(client.since.slice(0, 4) + "-01-01", 365 * (2026 - Number(client.since.slice(0, 4)) + 1)),
-  status: client.status === "Sem atividade" ? "Em revisão" : seeded(i, 23) === 0 ? "Encerrado" : "Ativo",
+  renewalDate: shiftDate(
+    client.since.slice(0, 4) + "-01-01",
+    365 * (2026 - Number(client.since.slice(0, 4)) + 1),
+  ),
+  status:
+    client.status === "Sem atividade" ? "Em revisão" : seeded(i, 23) === 0 ? "Encerrado" : "Ativo",
 }));
 
 export const proposals: Proposal[] = opportunities
-  .filter((o) => o.stage === "Proposta" || o.stage === "Negociação" || o.stage === "Fechado" || o.stage === "Perdido")
+  .filter(
+    (o) =>
+      o.stage === "Proposta" ||
+      o.stage === "Negociação" ||
+      o.stage === "Fechado" ||
+      o.stage === "Perdido",
+  )
   .map((o, i) => ({
     id: `pr-${o.id}`,
     opportunityId: o.id,
     company: o.company,
     services: o.services,
     value: o.mrr,
-    status: o.stage === "Fechado" ? "Aceita" : o.stage === "Perdido" ? "Recusada" : at(["Rascunho", "Enviada"] as const, seeded(i, 3)),
+    status:
+      o.stage === "Fechado"
+        ? "Aceita"
+        : o.stage === "Perdido"
+          ? "Recusada"
+          : at(["Rascunho", "Enviada"] as const, seeded(i, 3)),
     sentAt: shiftDate(o.expectedAt, -(10 + seeded(i, 15))),
   }));
 
@@ -1503,12 +1770,60 @@ export const meetings: Meeting[] = clients.slice(0, 14).map((client, i) => {
 });
 
 export const indicators: Indicator[] = [
-  { id: "ind-mrr", label: "MRR", value: totals.mrr, unit: "BRL", change: 8, tone: "good", module: "financeiro" },
-  { id: "ind-margin", label: "Margem operacional", value: margin, unit: "%", change: -2, tone: "bad", module: "rentabilidade" },
-  { id: "ind-utilization", label: "Ocupação da equipe", value: utilization, unit: "%", change: 3, tone: "warn", module: "pessoas" },
-  { id: "ind-overdue", label: "Inadimplência", value: totals.overdue, unit: "BRL", change: 6, tone: "bad", module: "financeiro" },
-  { id: "ind-late-tasks", label: "Tarefas atrasadas", value: totals.lateTasks, unit: "un", change: -18, tone: "warn", module: "tarefas" },
-  { id: "ind-nps", label: "NPS", value: totals.nps, unit: "pts", change: 0, tone: "warn", module: "clientes" },
+  {
+    id: "ind-mrr",
+    label: "MRR",
+    value: totals.mrr,
+    unit: "BRL",
+    change: 8,
+    tone: "good",
+    module: "financeiro",
+  },
+  {
+    id: "ind-margin",
+    label: "Margem operacional",
+    value: margin,
+    unit: "%",
+    change: -2,
+    tone: "bad",
+    module: "rentabilidade",
+  },
+  {
+    id: "ind-utilization",
+    label: "Ocupação da equipe",
+    value: utilization,
+    unit: "%",
+    change: 3,
+    tone: "warn",
+    module: "pessoas",
+  },
+  {
+    id: "ind-overdue",
+    label: "Inadimplência",
+    value: totals.overdue,
+    unit: "BRL",
+    change: 6,
+    tone: "bad",
+    module: "financeiro",
+  },
+  {
+    id: "ind-late-tasks",
+    label: "Tarefas atrasadas",
+    value: totals.lateTasks,
+    unit: "un",
+    change: -18,
+    tone: "warn",
+    module: "tarefas",
+  },
+  {
+    id: "ind-nps",
+    label: "NPS",
+    value: totals.nps,
+    unit: "pts",
+    change: 0,
+    tone: "warn",
+    module: "clientes",
+  },
 ];
 
 // ---------- motor de rentabilidade real por cliente ----------
@@ -1573,9 +1888,20 @@ export const crossSellTargets = clients
 
 export const employeeCapacity = computeEmployeeCapacity(employees, tasks, timeEntries, projects);
 export const departmentCapacity = buildDepartmentCapacity(employeeCapacity, processes);
-export const officeCapacityOverview = buildOfficeCapacityOverview(employeeCapacity, departmentCapacity);
-export const capacityForecast = computeCapacityForecast(employeeCapacity, departmentCapacity, tasks);
-export const capacityRecommendations = computeCapacityRecommendations(employeeCapacity, departmentCapacity, tasks);
+export const officeCapacityOverview = buildOfficeCapacityOverview(
+  employeeCapacity,
+  departmentCapacity,
+);
+export const capacityForecast = computeCapacityForecast(
+  employeeCapacity,
+  departmentCapacity,
+  tasks,
+);
+export const capacityRecommendations = computeCapacityRecommendations(
+  employeeCapacity,
+  departmentCapacity,
+  tasks,
+);
 
 // ---------- motor de automação ----------
 // Quando → Se → Então. Nenhuma ação externa é executada automaticamente no
@@ -1584,7 +1910,15 @@ export const capacityRecommendations = computeCapacityRecommendations(employeeCa
 // histórico inicial abaixo já nasce de rodar o avaliador contra os dados do
 // seed — não é número inventado. Ver src/lib/automation-engine.ts.
 
-const automationEvalContext = { documents, obligations, tasks, churnRisks, churnReviewed: {}, revenueOpportunities, clients };
+const automationEvalContext = {
+  documents,
+  obligations,
+  tasks,
+  churnRisks,
+  churnReviewed: {},
+  revenueOpportunities,
+  clients,
+};
 
 function seedAutomation(
   id: string,
@@ -1594,7 +1928,16 @@ function seedAutomation(
   actions: AutomationActionType[],
   status: AutomationStatus,
 ): Automation {
-  const base: Automation = { id, name, trigger, conditions, actions, status, lastRunAt: null, history: [] };
+  const base: Automation = {
+    id,
+    name,
+    trigger,
+    conditions,
+    actions,
+    status,
+    lastRunAt: null,
+    history: [],
+  };
   if (status === "Pausada") return base;
   const matches = evaluateAutomation(base, automationEvalContext);
   const run: AutomationRun = {
@@ -1602,16 +1945,47 @@ function seedAutomation(
     at: "2026-09-14",
     matchedCount: matches.length,
     executedCount: 0,
-    summary: matches.length > 0 ? `${matches.length} correspondência(s) encontrada(s) na última verificação.` : "Nenhuma correspondência na última verificação.",
+    summary:
+      matches.length > 0
+        ? `${matches.length} correspondência(s) encontrada(s) na última verificação.`
+        : "Nenhuma correspondência na última verificação.",
   };
   return { ...base, lastRunAt: "2026-09-14", history: [run] };
 }
 
 export const automations: Automation[] = [
-  seedAutomation("auto-1", "Atualizar obrigação ao receber documento", "documento-recebido", ["cliente-possui-obrigacao-pendente"], ["atualizar-obrigacao"], "Ativa"),
-  seedAutomation("auto-2", "Alertar tarefas próximas do SLA", "tarefa-proxima-sla", ["nenhuma"], ["criar-alerta"], "Ativa"),
-  seedAutomation("auto-3", "Criar tarefa para risco de churn", "cliente-risco-churn", ["nenhuma"], ["criar-tarefa-responsavel"], "Ativa"),
-  seedAutomation("auto-4", "Gerar oportunidade comercial por honorário defasado", "honorario-abaixo-recomendado", ["nenhuma"], ["criar-oportunidade-comercial"], "Pausada"),
+  seedAutomation(
+    "auto-1",
+    "Atualizar obrigação ao receber documento",
+    "documento-recebido",
+    ["cliente-possui-obrigacao-pendente"],
+    ["atualizar-obrigacao"],
+    "Ativa",
+  ),
+  seedAutomation(
+    "auto-2",
+    "Alertar tarefas próximas do SLA",
+    "tarefa-proxima-sla",
+    ["nenhuma"],
+    ["criar-alerta"],
+    "Ativa",
+  ),
+  seedAutomation(
+    "auto-3",
+    "Criar tarefa para risco de churn",
+    "cliente-risco-churn",
+    ["nenhuma"],
+    ["criar-tarefa-responsavel"],
+    "Ativa",
+  ),
+  seedAutomation(
+    "auto-4",
+    "Gerar oportunidade comercial por honorário defasado",
+    "honorario-abaixo-recomendado",
+    ["nenhuma"],
+    ["criar-oportunidade-comercial"],
+    "Pausada",
+  ),
 ];
 
 // ---------- benchmarking ----------
@@ -1620,7 +1994,8 @@ export const automations: Automation[] = [
 // demonstrativa. Nenhum dado individual de outro escritório é exibido. Ver
 // src/lib/benchmarking-engine.ts.
 
-const churnRatePct = clients.length > 0 ? Math.round((mrrWaterfall.churn.count / clients.length) * 1000) / 10 : 0;
+const churnRatePct =
+  clients.length > 0 ? Math.round((mrrWaterfall.churn.count / clients.length) * 1000) / 10 : 0;
 
 export const benchmarking = computeBenchmarking({
   totalMrr: totals.mrr,
@@ -1657,7 +2032,11 @@ const intelligenceInput: IntelligenceInput = {
 export const alerts: Alert[] = computeAlerts(intelligenceInput);
 export const insights: Insight[] = [
   ...computeInsights(intelligenceInput),
-  ...computeProfitabilityInsights({ clients, clientsProfitability: clientProfitability, formatCurrency: brl }),
+  ...computeProfitabilityInsights({
+    clients,
+    clientsProfitability: clientProfitability,
+    formatCurrency: brl,
+  }),
   ...computeRevenueOpportunityInsights(revenueOpportunities, clients, brl),
   ...computeChurnInsights(churnRisks, healthScores, clients),
   ...computeCapacityInsights(employeeCapacity, departmentCapacity, capacityForecast),

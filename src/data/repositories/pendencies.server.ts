@@ -1,4 +1,4 @@
-import { supabaseDomain } from "./domain-client.server";
+import type { DomainClient } from "./domain-client.server";
 import type { Pendency } from "@/data/office";
 import type { PendencyRow } from "./domain-types";
 
@@ -20,14 +20,14 @@ function fromRow(row: PendencyRow): Pendency {
   };
 }
 
-export async function listPendencies(workspaceId: string): Promise<Pendency[]> {
-  const { data, error } = await supabaseDomain.from("pendencies").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false });
+export async function listPendencies(client: DomainClient, workspaceId: string): Promise<Pendency[]> {
+  const { data, error } = await client.from("pendencies").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false });
   if (error) throw new Error(`Falha ao listar pendências: ${error.message}`);
   return (data ?? []).map(fromRow);
 }
 
-export async function upsertPendency(workspaceId: string, pendency: Pendency): Promise<void> {
-  const { error } = await supabaseDomain.from("pendencies").upsert({
+export async function upsertPendency(client: DomainClient, workspaceId: string, pendency: Pendency): Promise<void> {
+  const { error } = await client.from("pendencies").upsert({
     id: pendency.id,
     workspace_id: workspaceId,
     client_id: pendency.clientId,
@@ -44,4 +44,16 @@ export async function upsertPendency(workspaceId: string, pendency: Pendency): P
     created_at: `${pendency.createdAt}T00:00:00Z`,
   });
   if (error) throw new Error(`Falha ao salvar pendência ${pendency.id}: ${error.message}`);
+}
+
+/**
+ * Usado pelo Portal do Cliente (papel 'client'): UPDATE puro, nunca upsert.
+ * A RLS de cliente (pendencies_client_update) só concede UPDATE, não INSERT
+ * — um .upsert() emitiria INSERT ... ON CONFLICT e falharia na policy mesmo
+ * atualizando uma linha existente. Só marca a pendência concluída; não abre
+ * caminho para o cliente reescrever categoria/responsável/prazo.
+ */
+export async function completeClientPendency(client: DomainClient, id: string): Promise<void> {
+  const { error } = await client.from("pendencies").update({ status: "Concluída" }).eq("id", id);
+  if (error) throw new Error(`Falha ao concluir pendência ${id}: ${error.message}`);
 }

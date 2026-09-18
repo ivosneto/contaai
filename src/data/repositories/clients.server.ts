@@ -1,24 +1,45 @@
-import { supabaseDomain } from "./domain-client.server";
+import type { DomainClient } from "./domain-client.server";
 import { departmentIdFor, departmentNameFor } from "./departments.server";
 import type { Client, ServiceName } from "@/data/office";
 import type { ClientRow } from "./domain-types";
 
-/** Memoizado por processo — o catálogo de 6 serviços não muda em runtime. */
-const serviceIdByName = new Map<string, string>();
-const serviceNameById = new Map<string, string>();
+/**
+ * Memoizado por processo, uma entrada por workspace (mesmo padrão de
+ * departments.server.ts) — o catálogo de serviços não muda em runtime, mas
+ * múltiplos workspaces coexistem no mesmo processo (cada signup cria um
+ * workspace novo), então um cache sem chave de workspace misturaria os ids
+ * de serviço de um workspace com os de outro.
+ */
+const serviceIdByNameCache = new Map<string, Map<string, string>>();
+const serviceNameByIdCache = new Map<string, Map<string, string>>();
 
-async function loadServiceMaps(workspaceId: string) {
-  if (serviceIdByName.size > 0) return;
-  const { data, error } = await supabaseDomain.from("services").select("id,name").eq("workspace_id", workspaceId);
+async function loadServiceMaps(
+  client: DomainClient,
+  workspaceId: string,
+): Promise<{ byName: Map<string, string>; byId: Map<string, string> }> {
+  const cachedByName = serviceIdByNameCache.get(workspaceId);
+  const cachedById = serviceNameByIdCache.get(workspaceId);
+  if (cachedByName && cachedById) return { byName: cachedByName, byId: cachedById };
+  const { data, error } = await client.from("services").select("id,name").eq("workspace_id", workspaceId);
   if (error) throw new Error(`Falha ao carregar catálogo de serviços: ${error.message}`);
+  const byName = new Map<string, string>();
+  const byId = new Map<string, string>();
   for (const row of data ?? []) {
-    serviceIdByName.set(row.name, row.id);
-    serviceNameById.set(row.id, row.name);
+    byName.set(row.name, row.id);
+    byId.set(row.id, row.name);
   }
+  serviceIdByNameCache.set(workspaceId, byName);
+  serviceNameByIdCache.set(workspaceId, byId);
+  return { byName, byId };
 }
 
-async function fromRow(workspaceId: string, row: ClientRow, serviceIds: string[]): Promise<Client> {
-  await loadServiceMaps(workspaceId);
+async function fromRow(
+  client: DomainClient,
+  workspaceId: string,
+  row: ClientRow,
+  serviceIds: string[],
+  serviceNameById: Map<string, string>,
+): Promise<Client> {
   return {
     id: row.id,
     name: row.name,
@@ -34,7 +55,7 @@ async function fromRow(workspaceId: string, row: ClientRow, serviceIds: string[]
     feeLastPeriod: Number(row.fee_last_period),
     cost: Number(row.cost),
     owner: row.owner,
-    department: (await departmentNameFor(workspaceId, row.department_id)) ?? "Contábil",
+    department: (await departmentNameFor(client, workspaceId, row.department_id)) ?? "Contábil",
     nps: row.nps,
     health: row.health,
     status: row.status as Client["status"],
@@ -52,10 +73,12 @@ async function fromRow(workspaceId: string, row: ClientRow, serviceIds: string[]
   };
 }
 
-export async function listClients(workspaceId: string): Promise<Client[]> {
+/** Chamada por staff (todos os clientes do workspace) e também pelo Portal, onde a RLS (clients_client_read) já restringe o resultado à própria linha do cliente autenticado — a mesma função serve os dois papéis sem branch de código. */
+export async function listClients(client: DomainClient, workspaceId: string): Promise<Client[]> {
+  const { byId: serviceNameById } = await loadServiceMaps(client, workspaceId);
   const [{ data: rows, error }, { data: joins, error: joinError }] = await Promise.all([
-    supabaseDomain.from("clients").select("*").eq("workspace_id", workspaceId).order("name"),
-    supabaseDomain.from("client_services").select("client_id,service_id"),
+    client.from("clients").select("*").eq("workspace_id", workspaceId).order("name"),
+    client.from("client_services").select("client_id,service_id"),
   ]);
   if (error) throw new Error(`Falha ao listar clientes: ${error.message}`);
   if (joinError) throw new Error(`Falha ao listar serviços contratados: ${joinError.message}`);
@@ -65,36 +88,40 @@ export async function listClients(workspaceId: string): Promise<Client[]> {
     list.push(j.service_id);
     servicesByClient.set(j.client_id, list);
   }
-  return Promise.all((rows ?? []).map((row) => fromRow(workspaceId, row, servicesByClient.get(row.id) ?? [])));
+  return Promise.all(
+    (rows ?? []).map((row) =>
+      fromRow(client, workspaceId, row, servicesByClient.get(row.id) ?? [], serviceNameById),
+    ),
+  );
 }
 
-/** Só os campos editáveis nesta fase (nome, CNPJ, segmento, regime, responsável, serviços, honorário, status) são gravados — o resto do registro (métricas, histórico) é preservado como está no banco. */
-export async function upsertClient(workspaceId: string, client: Client): Promise<void> {
-  await loadServiceMaps(workspaceId);
-  const departmentId = await departmentIdFor(workspaceId, client.department);
-  const { error } = await supabaseDomain
+/** Só os campos editáveis nesta fase (nome, CNPJ, segmento, regime, responsável, serviços, honorário, status) são gravados — o resto do registro (métricas, histórico) é preservado como está no banco. RLS (clients_write) já exige owner/admin/manager; requireManagerOrAbove() no server function é defesa em profundidade. */
+export async function upsertClient(client: DomainClient, workspaceId: string, input: Client): Promise<void> {
+  const { byName: serviceIdByName } = await loadServiceMaps(client, workspaceId);
+  const departmentId = await departmentIdFor(client, workspaceId, input.department);
+  const { error } = await client
     .from("clients")
     .update({
-      name: client.name,
-      cnpj: client.cnpj,
-      segment: client.segment,
-      regime: client.regime,
-      owner: client.owner,
+      name: input.name,
+      cnpj: input.cnpj,
+      segment: input.segment,
+      regime: input.regime,
+      owner: input.owner,
       department_id: departmentId,
-      fee: client.fee,
-      status: client.status,
+      fee: input.fee,
+      status: input.status,
     })
-    .eq("id", client.id)
+    .eq("id", input.id)
     .eq("workspace_id", workspaceId);
-  if (error) throw new Error(`Falha ao salvar cliente ${client.id}: ${error.message}`);
+  if (error) throw new Error(`Falha ao salvar cliente ${input.id}: ${error.message}`);
 
-  const serviceIds = client.services.map((name) => serviceIdByName.get(name)).filter((id): id is string => Boolean(id));
-  const { error: deleteError } = await supabaseDomain.from("client_services").delete().eq("client_id", client.id);
-  if (deleteError) throw new Error(`Falha ao atualizar serviços do cliente ${client.id}: ${deleteError.message}`);
+  const serviceIds = input.services.map((name) => serviceIdByName.get(name)).filter((id): id is string => Boolean(id));
+  const { error: deleteError } = await client.from("client_services").delete().eq("client_id", input.id);
+  if (deleteError) throw new Error(`Falha ao atualizar serviços do cliente ${input.id}: ${deleteError.message}`);
   if (serviceIds.length > 0) {
-    const { error: insertError } = await supabaseDomain
+    const { error: insertError } = await client
       .from("client_services")
-      .insert(serviceIds.map((service_id) => ({ client_id: client.id, service_id })));
-    if (insertError) throw new Error(`Falha ao gravar serviços do cliente ${client.id}: ${insertError.message}`);
+      .insert(serviceIds.map((service_id) => ({ client_id: input.id, service_id })));
+    if (insertError) throw new Error(`Falha ao gravar serviços do cliente ${input.id}: ${insertError.message}`);
   }
 }

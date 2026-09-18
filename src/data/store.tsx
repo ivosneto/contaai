@@ -24,13 +24,13 @@ import {
 import { ContaAILogo } from "@/components/brand/logo";
 import {
   automations as seedAutomations,
-  communications as seedCommunications,
-  documents as seedDocuments,
   employees,
   processes,
   projects,
   tasks as seedTasks,
   timeEntries,
+  type AppRole,
+  type Announcement,
   type Client,
   type ClientDocument,
   type Communication,
@@ -54,13 +54,19 @@ import {
 import { OBLIGATION_DEPARTMENT, buildChecklist } from "@/lib/obligations-engine";
 import { runDocumentPipeline } from "@/lib/documents-engine";
 import { classifyContent, summarize } from "@/lib/communication-engine";
-import { buildDepartmentCapacity, computeCapacityRecommendations, computeEmployeeCapacity } from "@/lib/capacity-engine";
+import {
+  buildDepartmentCapacity,
+  computeCapacityRecommendations,
+  computeEmployeeCapacity,
+} from "@/lib/capacity-engine";
 import { buildProcessSteps } from "@/lib/process-engine";
 import type { Automation, AutomationMatch, AutomationRun } from "@/lib/automation-engine";
 import {
   deleteKnowledgeArticleFn,
   fetchDomainBootstrap,
   persistClient,
+  persistCommunication,
+  persistDocument,
   persistKnowledgeArticle,
   persistObligation,
   persistPendency,
@@ -68,7 +74,9 @@ import {
   persistProject,
   persistTask,
   persistTimelineEvent,
+  uploadStaffDocumentFn,
 } from "@/data/server-functions/domain";
+import { processDocumentFn } from "@/data/server-functions/document-intelligence";
 
 /**
  * seedTasks (100 tarefas de src/data/office.ts) continua importado só como
@@ -107,6 +115,8 @@ type StoreState = {
   processes: Process[];
   projects: Project[];
   knowledgeArticles: KnowledgeArticle[];
+  /** Sem ação de mutação nesta app — carregado uma vez no bootstrap. */
+  announcements: Announcement[];
   insightStatus: Record<string, EntryStatus>;
   alertStatus: Record<string, EntryStatus>;
   churnReviewed: Record<string, string>; // clientId -> data em que foi marcado como analisado
@@ -194,6 +204,7 @@ export type NewDocumentInput = {
   category: PendencyCategory;
   competence: string;
   assignee: string;
+  file: File;
 };
 
 export type NewAutomationInput = Pick<Automation, "name" | "trigger" | "conditions" | "actions">;
@@ -207,7 +218,10 @@ export type NewTaskInput = {
   hours: number;
 };
 
-export type ClientEditableFields = Pick<Client, "name" | "cnpj" | "segment" | "regime" | "owner" | "services" | "fee" | "status">;
+export type ClientEditableFields = Pick<
+  Client,
+  "name" | "cnpj" | "segment" | "regime" | "owner" | "services" | "fee" | "status"
+>;
 
 export type NewProcessInput = {
   clientId: string;
@@ -222,16 +236,28 @@ export type NewProjectInput = {
   dueDate: string;
 };
 
-export type NewKnowledgeArticleInput = Pick<KnowledgeArticle, "category" | "title" | "summary" | "content">;
+export type NewKnowledgeArticleInput = Pick<
+  KnowledgeArticle,
+  "category" | "title" | "summary" | "content"
+>;
 
 type Action =
   | { type: "CREATE_PENDENCY"; input: NewPendencyInput }
-  | { type: "UPDATE_PENDENCY"; id: string; patch: Partial<Pick<Pendency, "status" | "priority" | "dueDate" | "assignee">> }
+  | {
+      type: "UPDATE_PENDENCY";
+      id: string;
+      patch: Partial<Pick<Pendency, "status" | "priority" | "dueDate" | "assignee">>;
+    }
   | { type: "COMPLETE_PENDENCY"; id: string }
   | { type: "CREATE_TASK_FROM_PENDENCY"; pendencyId: string }
   | { type: "CREATE_COMMUNICATION_FROM_PENDENCY"; pendencyId: string }
   | { type: "CREATE_TASK_FOR_CLIENT"; clientId: string; title: string }
-  | { type: "CREATE_COMMERCIAL_RECOMMENDATION"; clientId: string; title: string; description: string }
+  | {
+      type: "CREATE_COMMERCIAL_RECOMMENDATION";
+      clientId: string;
+      title: string;
+      description: string;
+    }
   | { type: "RESOLVE_INSIGHT"; id: string }
   | { type: "IGNORE_INSIGHT"; id: string }
   | { type: "RESOLVE_ALERT"; id: string }
@@ -241,12 +267,18 @@ type Action =
   | { type: "COMPLETE_TASK"; taskId: string }
   | { type: "LOG_CAPACITY_DECISION"; kind: string; title: string; detail: string }
   | { type: "CREATE_OBLIGATION"; input: NewObligationInput }
-  | { type: "UPDATE_OBLIGATION"; id: string; patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">> }
+  | {
+      type: "UPDATE_OBLIGATION";
+      id: string;
+      patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">>;
+    }
   | { type: "TOGGLE_CHECKLIST_ITEM"; obligationId: string; itemId: string }
   | { type: "CREATE_PENDENCY_FROM_OBLIGATION"; obligationId: string }
-  | { type: "UPLOAD_DOCUMENT"; input: NewDocumentInput }
+  | { type: "ADD_UPLOADED_DOCUMENT"; doc: ClientDocument }
   | { type: "PROCESS_DOCUMENT"; documentId: string }
+  | { type: "PROCESSED_DOCUMENT"; document: ClientDocument; timelineEvent: TimelineEvent }
   | { type: "ASSIGN_MESSAGE"; id: string; assignee: string }
+  | { type: "ASSIGN_COMMUNICATION_CLIENT"; id: string; clientId: string }
   | { type: "UPDATE_MESSAGE_STATUS"; id: string; status: CommunicationStatus }
   | { type: "SEND_REPLY"; messageId: string; content: string }
   | { type: "CREATE_CLIENT_MESSAGE"; clientId: string; content: string }
@@ -260,12 +292,33 @@ type Action =
   | { type: "CREATE_PROCESS"; input: NewProcessInput }
   | { type: "UPDATE_PROCESS"; id: string; patch: Partial<Pick<Process, "progress" | "slaOk">> }
   | { type: "CREATE_PROJECT"; input: NewProjectInput }
-  | { type: "UPDATE_PROJECT"; id: string; patch: Partial<Pick<Project, "status" | "progress" | "dueDate">> }
+  | {
+      type: "UPDATE_PROJECT";
+      id: string;
+      patch: Partial<Pick<Project, "status" | "progress" | "dueDate">>;
+    }
   | { type: "CREATE_KNOWLEDGE_ARTICLE"; input: NewKnowledgeArticleInput }
-  | { type: "UPDATE_KNOWLEDGE_ARTICLE"; id: string; patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">> }
-  | { type: "DELETE_KNOWLEDGE_ARTICLE"; id: string };
+  | {
+      type: "UPDATE_KNOWLEDGE_ARTICLE";
+      id: string;
+      patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">>;
+    }
+  | { type: "DELETE_KNOWLEDGE_ARTICLE"; id: string }
+  | {
+      type: "MERGE_BOOTSTRAP";
+      pendencies: Pendency[];
+      tasks: Task[];
+      obligations: Obligation[];
+      documents: ClientDocument[];
+      timelineEvents: TimelineEvent[];
+    };
 
-function logFor(clientId: string, type: TimelineEvent["type"], title: string, detail: string): TimelineEvent {
+function logFor(
+  clientId: string,
+  type: TimelineEvent["type"],
+  title: string,
+  detail: string,
+): TimelineEvent {
   return { id: genId("log"), clientId, date: today(), type, title, detail };
 }
 
@@ -296,7 +349,10 @@ function applyCreatePendency(state: StoreState, input: NewPendencyInput): StoreS
   return {
     ...state,
     pendencies: [p, ...state.pendencies],
-    activityLog: [logFor(p.clientId, "pendência", "Pendência criada", p.title), ...state.activityLog],
+    activityLog: [
+      logFor(p.clientId, "pendência", "Pendência criada", p.title),
+      ...state.activityLog,
+    ],
   };
 }
 
@@ -321,7 +377,12 @@ function applyCreateTaskForClient(state: StoreState, clientId: string, title: st
   };
 }
 
-function applyCreateCommercialRecommendation(state: StoreState, clientId: string, title: string, description: string): StoreState {
+function applyCreateCommercialRecommendation(
+  state: StoreState,
+  clientId: string,
+  title: string,
+  description: string,
+): StoreState {
   const client = findClient(state, clientId);
   const p: Pendency = {
     id: genId("pd"),
@@ -341,7 +402,10 @@ function applyCreateCommercialRecommendation(state: StoreState, clientId: string
   return {
     ...state,
     pendencies: [p, ...state.pendencies],
-    activityLog: [logFor(clientId, "pendência", "Recomendação comercial gerada", p.title), ...state.activityLog],
+    activityLog: [
+      logFor(clientId, "pendência", "Recomendação comercial gerada", p.title),
+      ...state.activityLog,
+    ],
   };
 }
 
@@ -351,10 +415,20 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
   const client = findClient(state, doc.clientId);
   if (!client) return state;
 
-  const result = runDocumentPipeline({ type: doc.type, category: doc.category, competence: doc.competence }, client, state.obligations, hashIndex(doc.id));
+  const result = runDocumentPipeline(
+    { type: doc.type, category: doc.category, competence: doc.competence },
+    client,
+    state.obligations,
+    hashIndex(doc.id),
+  );
 
   const events: TimelineEvent[] = [
-    logFor(doc.clientId, "documento", "Documento identificado e classificado", `${doc.type} · categoria ${doc.category} · competência ${doc.competence}.`),
+    logFor(
+      doc.clientId,
+      "documento",
+      "Documento identificado e classificado",
+      `${doc.type} · categoria ${doc.category} · competência ${doc.competence}.`,
+    ),
     logFor(
       doc.clientId,
       "documento",
@@ -369,7 +443,14 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
   let linkedPendencyId: string | null = null;
 
   if (result.validation.issues.length > 0) {
-    events.push(logFor(doc.clientId, "documento", "Validação encontrou problemas", result.validation.issues.join(" ")));
+    events.push(
+      logFor(
+        doc.clientId,
+        "documento",
+        "Validação encontrou problemas",
+        result.validation.issues.join(" "),
+      ),
+    );
     const pd: Pendency = {
       id: genId("pd"),
       clientId: doc.clientId,
@@ -387,7 +468,9 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
     };
     pendencies = [pd, ...pendencies];
     linkedPendencyId = pd.id;
-    events.push(logFor(doc.clientId, "pendência", "Pendência gerada a partir de documento", pd.title));
+    events.push(
+      logFor(doc.clientId, "pendência", "Pendência gerada a partir de documento", pd.title),
+    );
   } else {
     const matched = result.matchedObligation;
     events.push(
@@ -395,17 +478,32 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
         doc.clientId,
         "documento",
         "Documento validado, relacionado ao cliente e à obrigação",
-        matched ? `Obrigação correspondente: ${matched.type} (${matched.competence}).` : "Nenhuma obrigação correspondente encontrada para este documento.",
+        matched
+          ? `Obrigação correspondente: ${matched.type} (${matched.competence}).`
+          : "Nenhuma obrigação correspondente encontrada para este documento.",
       ),
     );
     if (matched) {
-      obligations = obligations.map((o) => (o.id === matched.id ? { ...o, evidenceDocumentId: doc.id } : o));
-      events.push(logFor(doc.clientId, "documento", "Processamento concluído", `Evidência anexada à obrigação ${matched.type}.`));
+      obligations = obligations.map((o) =>
+        o.id === matched.id ? { ...o, evidenceDocumentId: doc.id } : o,
+      );
+      events.push(
+        logFor(
+          doc.clientId,
+          "documento",
+          "Processamento concluído",
+          `Evidência anexada à obrigação ${matched.type}.`,
+        ),
+      );
 
       // "Sistema verifica que ainda existem outros documentos pendentes" — outras
       // obrigações do mesmo cliente/competência (o mesmo fechamento) ainda abertas.
       const stillPending = obligations.filter(
-        (o) => o.clientId === doc.clientId && o.competence === matched.competence && o.id !== matched.id && o.status !== "Concluída",
+        (o) =>
+          o.clientId === doc.clientId &&
+          o.competence === matched.competence &&
+          o.id !== matched.id &&
+          o.status !== "Concluída",
       );
 
       if (stillPending.length > 0) {
@@ -422,7 +520,9 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
         if (earliest) {
           const closingId = `pd-closing-${doc.clientId}-${matched.competence}`;
           linkedPendencyId = closingId;
-          const alreadyTracked = pendencies.some((p) => p.id === closingId && p.status !== "Concluída" && p.status !== "Cancelada");
+          const alreadyTracked = pendencies.some(
+            (p) => p.id === closingId && p.status !== "Concluída" && p.status !== "Cancelada",
+          );
 
           if (!alreadyTracked) {
             const closingPendency: Pendency = {
@@ -438,17 +538,38 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
               dueDate: earliest.dueDate,
               status: "Aberta",
               createdAt: today(),
-              recommendedAction: "Cobrar o cliente pelos documentos restantes e acompanhar o checklist das obrigações.",
+              recommendedAction:
+                "Cobrar o cliente pelos documentos restantes e acompanhar o checklist das obrigações.",
             };
             pendencies = [closingPendency, ...pendencies];
             // "Responsável é identificado" + "Prazo é calculado"
-            events.push(logFor(doc.clientId, "pendência", "Pendência de fechamento criada", `Responsável: ${earliest.assignee}. Prazo: ${earliest.dueDate}.`));
+            events.push(
+              logFor(
+                doc.clientId,
+                "pendência",
+                "Pendência de fechamento criada",
+                `Responsável: ${earliest.assignee}. Prazo: ${earliest.dueDate}.`,
+              ),
+            );
           } else {
-            events.push(logFor(doc.clientId, "pendência", "Pendência de fechamento já em acompanhamento", `Responsável: ${earliest.assignee}.`));
+            events.push(
+              logFor(
+                doc.clientId,
+                "pendência",
+                "Pendência de fechamento já em acompanhamento",
+                `Responsável: ${earliest.assignee}.`,
+              ),
+            );
           }
 
           // "Capacidade do responsável é analisada"
-          const liveCapacity = computeEmployeeCapacity(employees, state.tasks, timeEntries, projects, seedTasks);
+          const liveCapacity = computeEmployeeCapacity(
+            employees,
+            state.tasks,
+            timeEntries,
+            projects,
+            seedTasks,
+          );
           const responsible = liveCapacity.find((e) => e.name === earliest.assignee);
           if (responsible) {
             events.push(
@@ -461,7 +582,12 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
             );
 
             // "Sistema percebe que ele está sobrecarregado" → "Gera insight"
-            if (responsible.status === "Sobrecarregado" && !liveInsights.some((i) => i.assignee === responsible.name && i.id.startsWith("live-capacity-"))) {
+            if (
+              responsible.status === "Sobrecarregado" &&
+              !liveInsights.some(
+                (i) => i.assignee === responsible.name && i.id.startsWith("live-capacity-"),
+              )
+            ) {
               const insight: Insight = {
                 id: `live-capacity-${responsible.employeeId}-${genId("i")}`,
                 kind: "Problema",
@@ -474,7 +600,8 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
                   `${responsible.allocatedHours}h alocadas de ${responsible.availableHours}h disponíveis (${responsible.occupancy}%).`,
                   `Novo item: fechamento de ${client.name} (competência ${matched.competence}), vencimento ${earliest.dueDate}.`,
                 ],
-                impact: "Sobrecarga pode atrasar este e outros fechamentos sob responsabilidade desta pessoa.",
+                impact:
+                  "Sobrecarga pode atrasar este e outros fechamentos sob responsabilidade desta pessoa.",
                 recommendation: `Redistribuir tarefas de ${responsible.name} para um colega do ${responsible.department} com capacidade disponível.`,
                 actions: ["Redistribuir", "Ver capacidade"],
                 link: "/pessoas",
@@ -482,13 +609,27 @@ function applyProcessDocument(state: StoreState, documentId: string): StoreState
                 status: "Aberto",
               };
               liveInsights = [insight, ...liveInsights];
-              events.push(logFor(doc.clientId, "tarefa", "Insight gerado: sobrecarga detectada", insight.title));
+              events.push(
+                logFor(
+                  doc.clientId,
+                  "tarefa",
+                  "Insight gerado: sobrecarga detectada",
+                  insight.title,
+                ),
+              );
             }
           }
         }
       }
     } else {
-      events.push(logFor(doc.clientId, "documento", "Processamento concluído", "Documento aprovado sem obrigação vinculada."));
+      events.push(
+        logFor(
+          doc.clientId,
+          "documento",
+          "Processamento concluído",
+          "Documento aprovado sem obrigação vinculada.",
+        ),
+      );
     }
   }
 
@@ -522,27 +663,58 @@ function applyRedistributeFromInsight(state: StoreState, insightId: string): Sto
   const insight = state.liveInsights.find((i) => i.id === insightId);
   if (!insight || !insight.assignee) return state;
 
-  const liveCapacity = computeEmployeeCapacity(employees, state.tasks, timeEntries, projects, seedTasks);
+  const liveCapacity = computeEmployeeCapacity(
+    employees,
+    state.tasks,
+    timeEntries,
+    projects,
+    seedTasks,
+  );
   const departmentCapacity = buildDepartmentCapacity(liveCapacity, processes);
-  const recommendation = computeCapacityRecommendations(liveCapacity, departmentCapacity, state.tasks).find(
-    (r) => r.employeeName === insight.assignee && r.kind === "redistribuicao" && r.taskId && r.targetEmployeeName,
+  const recommendation = computeCapacityRecommendations(
+    liveCapacity,
+    departmentCapacity,
+    state.tasks,
+  ).find(
+    (r) =>
+      r.employeeName === insight.assignee &&
+      r.kind === "redistribuicao" &&
+      r.taskId &&
+      r.targetEmployeeName,
   );
 
   const before = liveCapacity.find((e) => e.name === insight.assignee);
-  const clientId = insight.clientId ?? state.tasks.find((t) => t.assignee === insight.assignee)?.clientId ?? "";
+  const clientId =
+    insight.clientId ?? state.tasks.find((t) => t.assignee === insight.assignee)?.clientId ?? "";
 
   if (!recommendation || !recommendation.taskId || !recommendation.targetEmployeeName) {
     return {
       ...state,
       liveInsights: state.liveInsights.filter((i) => i.id !== insightId),
       activityLog: clientId
-        ? [logFor(clientId, "tarefa", "Redistribuição não encontrou colega disponível", `Nenhum colaborador com folga suficiente para aliviar ${insight.assignee} agora.`), ...state.activityLog]
+        ? [
+            logFor(
+              clientId,
+              "tarefa",
+              "Redistribuição não encontrou colega disponível",
+              `Nenhum colaborador com folga suficiente para aliviar ${insight.assignee} agora.`,
+            ),
+            ...state.activityLog,
+          ]
         : state.activityLog,
     };
   }
 
-  const nextTasks = state.tasks.map((t) => (t.id === recommendation.taskId ? { ...t, assignee: recommendation.targetEmployeeName! } : t));
-  const afterCapacity = computeEmployeeCapacity(employees, nextTasks, timeEntries, projects, seedTasks);
+  const nextTasks = state.tasks.map((t) =>
+    t.id === recommendation.taskId ? { ...t, assignee: recommendation.targetEmployeeName! } : t,
+  );
+  const afterCapacity = computeEmployeeCapacity(
+    employees,
+    nextTasks,
+    timeEntries,
+    projects,
+    seedTasks,
+  );
   const after = afterCapacity.find((e) => e.name === insight.assignee);
 
   const measured =
@@ -554,7 +726,12 @@ function applyRedistributeFromInsight(state: StoreState, insightId: string): Sto
     ...state,
     tasks: nextTasks,
     liveInsights: state.liveInsights.filter((i) => i.id !== insightId),
-    activityLog: clientId ? [logFor(clientId, "tarefa", "Redistribuição aprovada e medida", measured), ...state.activityLog] : state.activityLog,
+    activityLog: clientId
+      ? [
+          logFor(clientId, "tarefa", "Redistribuição aprovada e medida", measured),
+          ...state.activityLog,
+        ]
+      : state.activityLog,
   };
 }
 
@@ -565,16 +742,23 @@ function reducer(state: StoreState, action: Action): StoreState {
     case "UPDATE_PENDENCY": {
       return {
         ...state,
-        pendencies: state.pendencies.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
+        pendencies: state.pendencies.map((p) =>
+          p.id === action.id ? { ...p, ...action.patch } : p,
+        ),
       };
     }
     case "COMPLETE_PENDENCY": {
       const target = state.pendencies.find((p) => p.id === action.id);
       return {
         ...state,
-        pendencies: state.pendencies.map((p) => (p.id === action.id ? { ...p, status: "Concluída" } : p)),
+        pendencies: state.pendencies.map((p) =>
+          p.id === action.id ? { ...p, status: "Concluída" } : p,
+        ),
         activityLog: target
-          ? [logFor(target.clientId, "pendência", "Pendência concluída", target.title), ...state.activityLog]
+          ? [
+              logFor(target.clientId, "pendência", "Pendência concluída", target.title),
+              ...state.activityLog,
+            ]
           : state.activityLog,
       };
     }
@@ -597,7 +781,10 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         tasks: [t, ...state.tasks],
-        activityLog: [logFor(p.clientId, "tarefa", "Tarefa gerada a partir de pendência", t.title), ...state.activityLog],
+        activityLog: [
+          logFor(p.clientId, "tarefa", "Tarefa gerada a partir de pendência", t.title),
+          ...state.activityLog,
+        ],
       };
     }
     case "CREATE_COMMUNICATION_FROM_PENDENCY": {
@@ -627,13 +814,21 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         communications: [c, ...state.communications],
-        activityLog: [logFor(p.clientId, "mensagem", "Comunicação gerada a partir de pendência", p.title), ...state.activityLog],
+        activityLog: [
+          logFor(p.clientId, "mensagem", "Comunicação gerada a partir de pendência", p.title),
+          ...state.activityLog,
+        ],
       };
     }
     case "CREATE_TASK_FOR_CLIENT":
       return applyCreateTaskForClient(state, action.clientId, action.title);
     case "CREATE_COMMERCIAL_RECOMMENDATION":
-      return applyCreateCommercialRecommendation(state, action.clientId, action.title, action.description);
+      return applyCreateCommercialRecommendation(
+        state,
+        action.clientId,
+        action.title,
+        action.description,
+      );
     case "RESOLVE_INSIGHT":
       return { ...state, insightStatus: { ...state.insightStatus, [action.id]: "resolvido" } };
     case "IGNORE_INSIGHT":
@@ -644,15 +839,33 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         churnReviewed: { ...state.churnReviewed, [action.clientId]: today() },
-        activityLog: [logFor(action.clientId, "pendência", "Risco de churn analisado", "Cliente marcado como analisado pelo gestor."), ...state.activityLog],
+        activityLog: [
+          logFor(
+            action.clientId,
+            "pendência",
+            "Risco de churn analisado",
+            "Cliente marcado como analisado pelo gestor.",
+          ),
+          ...state.activityLog,
+        ],
       };
     case "REASSIGN_TASK": {
       const target = state.tasks.find((t) => t.id === action.taskId);
       if (!target) return state;
       return {
         ...state,
-        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, assignee: action.assignee } : t)),
-        activityLog: [logFor(target.clientId, "tarefa", "Tarefa redistribuída", `"${target.title}" reatribuída para ${action.assignee}.`), ...state.activityLog],
+        tasks: state.tasks.map((t) =>
+          t.id === action.taskId ? { ...t, assignee: action.assignee } : t,
+        ),
+        activityLog: [
+          logFor(
+            target.clientId,
+            "tarefa",
+            "Tarefa redistribuída",
+            `"${target.title}" reatribuída para ${action.assignee}.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "REPRIORITIZE_TASK": {
@@ -660,8 +873,18 @@ function reducer(state: StoreState, action: Action): StoreState {
       if (!target) return state;
       return {
         ...state,
-        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, priority: action.priority } : t)),
-        activityLog: [logFor(target.clientId, "tarefa", "Prioridade da tarefa alterada", `"${target.title}" agora é prioridade ${action.priority}.`), ...state.activityLog],
+        tasks: state.tasks.map((t) =>
+          t.id === action.taskId ? { ...t, priority: action.priority } : t,
+        ),
+        activityLog: [
+          logFor(
+            target.clientId,
+            "tarefa",
+            "Prioridade da tarefa alterada",
+            `"${target.title}" agora é prioridade ${action.priority}.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "COMPLETE_TASK": {
@@ -669,17 +892,35 @@ function reducer(state: StoreState, action: Action): StoreState {
       if (!target || target.status === "Concluída") return state;
       return {
         ...state,
-        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, status: "Concluída" as const, late: false } : t)),
-        activityLog: [logFor(target.clientId, "tarefa", "Tarefa concluída", `"${target.title}" marcada como concluída.`), ...state.activityLog],
+        tasks: state.tasks.map((t) =>
+          t.id === action.taskId ? { ...t, status: "Concluída" as const, late: false } : t,
+        ),
+        activityLog: [
+          logFor(
+            target.clientId,
+            "tarefa",
+            "Tarefa concluída",
+            `"${target.title}" marcada como concluída.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "LOG_CAPACITY_DECISION": {
-      const entry: CapacityLogEntry = { id: genId("cap"), date: today(), kind: action.kind, title: action.title, detail: action.detail };
+      const entry: CapacityLogEntry = {
+        id: genId("cap"),
+        date: today(),
+        kind: action.kind,
+        title: action.title,
+        detail: action.detail,
+      };
       return { ...state, capacityLog: [entry, ...state.capacityLog] };
     }
     case "CREATE_OBLIGATION": {
       const client = findClient(state, action.input.clientId);
-      const municipality = state.obligations.find((o) => o.clientId === action.input.clientId)?.municipality ?? "Não informado";
+      const municipality =
+        state.obligations.find((o) => o.clientId === action.input.clientId)?.municipality ??
+        "Não informado";
       const ob: Obligation = {
         id: genId("ob"),
         clientId: action.input.clientId,
@@ -698,13 +939,23 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         obligations: [ob, ...state.obligations],
-        activityLog: [logFor(ob.clientId, "solicitação", "Obrigação criada", `${ob.type} — competência ${ob.competence}, vence ${ob.dueDate}.`), ...state.activityLog],
+        activityLog: [
+          logFor(
+            ob.clientId,
+            "solicitação",
+            "Obrigação criada",
+            `${ob.type} — competência ${ob.competence}, vence ${ob.dueDate}.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "UPDATE_OBLIGATION": {
       return {
         ...state,
-        obligations: state.obligations.map((o) => (o.id === action.id ? { ...o, ...action.patch } : o)),
+        obligations: state.obligations.map((o) =>
+          o.id === action.id ? { ...o, ...action.patch } : o,
+        ),
       };
     }
     case "TOGGLE_CHECKLIST_ITEM": {
@@ -712,7 +963,12 @@ function reducer(state: StoreState, action: Action): StoreState {
         ...state,
         obligations: state.obligations.map((o) =>
           o.id === action.obligationId
-            ? { ...o, checklist: o.checklist.map((item) => (item.id === action.itemId ? { ...item, done: !item.done } : item)) }
+            ? {
+                ...o,
+                checklist: o.checklist.map((item) =>
+                  item.id === action.itemId ? { ...item, done: !item.done } : item,
+                ),
+              }
             : o,
         ),
       };
@@ -738,41 +994,82 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         pendencies: [pd, ...state.pendencies],
-        activityLog: [logFor(ob.clientId, "pendência", "Pendência gerada a partir de obrigação", pd.title), ...state.activityLog],
+        activityLog: [
+          logFor(ob.clientId, "pendência", "Pendência gerada a partir de obrigação", pd.title),
+          ...state.activityLog,
+        ],
       };
     }
-    case "UPLOAD_DOCUMENT": {
-      const client = findClient(state, action.input.clientId);
-      const doc: ClientDocument = {
-        id: genId("doc"),
-        clientId: action.input.clientId,
-        name: `${action.input.type} — ${client?.name ?? action.input.clientId}`,
-        type: action.input.type,
-        category: action.input.category,
-        competence: action.input.competence,
-        assignee: action.input.assignee,
-        status: "Recebido",
-        pipelineStage: "Recebido",
-        uploadedAt: today(),
-        extraction: null,
-        linkedObligationId: null,
-        linkedPendencyId: null,
-      };
+    case "ADD_UPLOADED_DOCUMENT": {
+      // O arquivo já foi enviado ao Storage e a linha já existe no banco —
+      // ver uploadStaffDocumentFn/uploadPortalDocument — isto só reflete o
+      // resultado no estado local (mesmo padrão de write-through das
+      // outras entidades, só que aqui o servidor grava antes de o cliente
+      // confirmar, porque o upload em si é inerentemente assíncrono).
       return {
         ...state,
-        documents: [doc, ...state.documents],
-        activityLog: [logFor(doc.clientId, "documento", "Documento recebido", doc.name), ...state.activityLog],
+        documents: [action.doc, ...state.documents],
+        activityLog: [
+          logFor(action.doc.clientId, "documento", "Documento recebido", action.doc.name),
+          ...state.activityLog,
+        ],
       };
     }
     case "PROCESS_DOCUMENT":
       return applyProcessDocument(state, action.documentId);
+    case "PROCESSED_DOCUMENT":
+      // O servidor já processou de verdade (OCR real ou fallback simulado,
+      // ver processDocumentFn) e já gravou a linha — isto só reflete o
+      // resultado no estado local (mesmo padrão write-through-invertido de
+      // ADD_UPLOADED_DOCUMENT, ver comentário lá). Nunca cria pendência/
+      // vínculo de obrigação aqui: essas propostas já foram gravadas em
+      // ai_actions pelo servidor e esperam aprovação humana explícita.
+      return {
+        ...state,
+        documents: state.documents.map((d) => (d.id === action.document.id ? action.document : d)),
+        activityLog: [action.timelineEvent, ...state.activityLog],
+      };
     case "ASSIGN_MESSAGE": {
       const target = state.communications.find((m) => m.id === action.id);
       if (!target) return state;
+      // Mensagem sem cliente identificado (e-mail sincronizado com baixa confiança de
+      // matching) não tem timeline de cliente pra registrar — só a atribuição de fato muda.
+      const event = target.clientId
+        ? [
+            logFor(
+              target.clientId,
+              "mensagem",
+              "Mensagem atribuída",
+              `"${target.subject}" atribuída para ${action.assignee}.`,
+            ),
+          ]
+        : [];
       return {
         ...state,
-        communications: state.communications.map((m) => (m.id === action.id ? { ...m, assignee: action.assignee } : m)),
-        activityLog: [logFor(target.clientId, "mensagem", "Mensagem atribuída", `"${target.subject}" atribuída para ${action.assignee}.`), ...state.activityLog],
+        communications: state.communications.map((m) =>
+          m.id === action.id ? { ...m, assignee: action.assignee } : m,
+        ),
+        activityLog: [...event, ...state.activityLog],
+      };
+    }
+    case "ASSIGN_COMMUNICATION_CLIENT": {
+      const target = state.communications.find((m) => m.id === action.id);
+      if (!target) return state;
+      const client = findClient(state, action.clientId);
+      return {
+        ...state,
+        communications: state.communications.map((m) =>
+          m.id === action.id ? { ...m, clientId: action.clientId } : m,
+        ),
+        activityLog: [
+          logFor(
+            action.clientId,
+            "mensagem",
+            "Comunicação vinculada manualmente",
+            `"${target.subject}" (${target.sender}) vinculada a ${client?.name ?? action.clientId} — triagem manual, matching automático teve baixa confiança.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "UPDATE_MESSAGE_STATUS": {
@@ -780,7 +1077,14 @@ function reducer(state: StoreState, action: Action): StoreState {
         ...state,
         communications: state.communications.map((m) =>
           m.id === action.id
-            ? { ...m, status: action.status, requiresAction: action.status === "Resolvida" || action.status === "Respondida" ? false : m.requiresAction }
+            ? {
+                ...m,
+                status: action.status,
+                requiresAction:
+                  action.status === "Resolvida" || action.status === "Respondida"
+                    ? false
+                    : m.requiresAction,
+              }
             : m,
         ),
       };
@@ -807,16 +1111,34 @@ function reducer(state: StoreState, action: Action): StoreState {
         requiresAction: false,
         suggestedAction: "",
       };
+      const replyEvent = original.clientId
+        ? [
+            logFor(
+              original.clientId,
+              "mensagem",
+              "Resposta enviada",
+              `Resposta enviada para "${original.subject}".`,
+            ),
+          ]
+        : [];
       return {
         ...state,
-        communications: [reply, ...state.communications.map((m) => (m.id === original.id ? { ...m, status: "Respondida" as const, requiresAction: false } : m))],
-        activityLog: [logFor(original.clientId, "mensagem", "Resposta enviada", `Resposta enviada para "${original.subject}".`), ...state.activityLog],
+        communications: [
+          reply,
+          ...state.communications.map((m) =>
+            m.id === original.id
+              ? { ...m, status: "Respondida" as const, requiresAction: false }
+              : m,
+          ),
+        ],
+        activityLog: [...replyEvent, ...state.activityLog],
       };
     }
     case "CREATE_CLIENT_MESSAGE": {
       const client = findClient(state, action.clientId);
       const classification = classifyContent(action.content);
-      const subject = action.content.length > 60 ? `${action.content.slice(0, 60)}…` : action.content;
+      const subject =
+        action.content.length > 60 ? `${action.content.slice(0, 60)}…` : action.content;
       const m: Communication = {
         id: genId("cm"),
         clientId: action.clientId,
@@ -839,13 +1161,20 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         communications: [m, ...state.communications],
-        activityLog: [logFor(action.clientId, "mensagem", "Mensagem recebida pelo portal do cliente", subject), ...state.activityLog],
+        activityLog: [
+          logFor(action.clientId, "mensagem", "Mensagem recebida pelo portal do cliente", subject),
+          ...state.activityLog,
+        ],
       };
     }
     case "TOGGLE_AUTOMATION_STATUS": {
       return {
         ...state,
-        automations: state.automations.map((a) => (a.id === action.id ? { ...a, status: a.status === "Ativa" ? ("Pausada" as const) : ("Ativa" as const) } : a)),
+        automations: state.automations.map((a) =>
+          a.id === action.id
+            ? { ...a, status: a.status === "Ativa" ? ("Pausada" as const) : ("Ativa" as const) }
+            : a,
+        ),
       };
     }
     case "RUN_AUTOMATION": {
@@ -869,10 +1198,19 @@ function reducer(state: StoreState, action: Action): StoreState {
           });
         } else if (actionType === "criar-tarefa-responsavel") {
           const client = findClient(next, match.clientId);
-          next = applyCreateTaskForClient(next, match.clientId, `Investigar risco de churn — ${client?.name ?? match.clientId}`);
+          next = applyCreateTaskForClient(
+            next,
+            match.clientId,
+            `Investigar risco de churn — ${client?.name ?? match.clientId}`,
+          );
         } else if (actionType === "criar-oportunidade-comercial") {
           const client = findClient(next, match.clientId);
-          next = applyCreateCommercialRecommendation(next, match.clientId, `Propor reajuste — ${client?.name ?? match.clientId}`, match.label);
+          next = applyCreateCommercialRecommendation(
+            next,
+            match.clientId,
+            `Propor reajuste — ${client?.name ?? match.clientId}`,
+            match.label,
+          );
         }
       }
       const run: AutomationRun = {
@@ -880,11 +1218,16 @@ function reducer(state: StoreState, action: Action): StoreState {
         at: today(),
         matchedCount: action.matches.length,
         executedCount: action.matches.length,
-        summary: action.matches.length > 0 ? `${action.matches.length} correspondência(s) processada(s).` : "Nenhuma correspondência no momento da execução.",
+        summary:
+          action.matches.length > 0
+            ? `${action.matches.length} correspondência(s) processada(s).`
+            : "Nenhuma correspondência no momento da execução.",
       };
       return {
         ...next,
-        automations: next.automations.map((a) => (a.id === automation.id ? { ...a, lastRunAt: today(), history: [run, ...a.history] } : a)),
+        automations: next.automations.map((a) =>
+          a.id === automation.id ? { ...a, lastRunAt: today(), history: [run, ...a.history] } : a,
+        ),
       };
     }
     case "CREATE_AUTOMATION": {
@@ -930,7 +1273,15 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         clients: state.clients.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)),
-        activityLog: [logFor(action.id, "solicitação", "Cadastro do cliente atualizado", `Campos alterados: ${Object.keys(action.patch).join(", ")}.`), ...state.activityLog],
+        activityLog: [
+          logFor(
+            action.id,
+            "solicitação",
+            "Cadastro do cliente atualizado",
+            `Campos alterados: ${Object.keys(action.patch).join(", ")}.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "CREATE_PROCESS": {
@@ -949,7 +1300,15 @@ function reducer(state: StoreState, action: Action): StoreState {
       return {
         ...state,
         processes: [p, ...state.processes],
-        activityLog: [logFor(action.input.clientId, "solicitação", "Processo criado", `${p.name} — ${action.input.department}, ${steps.length} etapa(s).`), ...state.activityLog],
+        activityLog: [
+          logFor(
+            action.input.clientId,
+            "solicitação",
+            "Processo criado",
+            `${p.name} — ${action.input.department}, ${steps.length} etapa(s).`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "UPDATE_PROCESS": {
@@ -959,11 +1318,26 @@ function reducer(state: StoreState, action: Action): StoreState {
       };
     }
     case "CREATE_PROJECT": {
-      const p: Project = { id: genId("pj"), clientId: action.input.clientId, name: action.input.name, status: "Planejado", progress: 0, dueDate: action.input.dueDate };
+      const p: Project = {
+        id: genId("pj"),
+        clientId: action.input.clientId,
+        name: action.input.name,
+        status: "Planejado",
+        progress: 0,
+        dueDate: action.input.dueDate,
+      };
       return {
         ...state,
         projects: [p, ...state.projects],
-        activityLog: [logFor(action.input.clientId, "solicitação", "Projeto criado", `${p.name} · prazo ${p.dueDate}.`), ...state.activityLog],
+        activityLog: [
+          logFor(
+            action.input.clientId,
+            "solicitação",
+            "Projeto criado",
+            `${p.name} · prazo ${p.dueDate}.`,
+          ),
+          ...state.activityLog,
+        ],
       };
     }
     case "UPDATE_PROJECT": {
@@ -973,28 +1347,63 @@ function reducer(state: StoreState, action: Action): StoreState {
         ...state,
         projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
         activityLog: action.patch.status
-          ? [logFor(target.clientId, "solicitação", "Status do projeto alterado", `"${target.name}" agora é "${action.patch.status}".`), ...state.activityLog]
+          ? [
+              logFor(
+                target.clientId,
+                "solicitação",
+                "Status do projeto alterado",
+                `"${target.name}" agora é "${action.patch.status}".`,
+              ),
+              ...state.activityLog,
+            ]
           : state.activityLog,
       };
     }
     case "CREATE_KNOWLEDGE_ARTICLE": {
-      const k: KnowledgeArticle = { id: genId("k"), category: action.input.category, title: action.input.title, summary: action.input.summary, content: action.input.content };
+      const k: KnowledgeArticle = {
+        id: genId("k"),
+        category: action.input.category,
+        title: action.input.title,
+        summary: action.input.summary,
+        content: action.input.content,
+      };
       return { ...state, knowledgeArticles: [k, ...state.knowledgeArticles] };
     }
     case "UPDATE_KNOWLEDGE_ARTICLE": {
       return {
         ...state,
-        knowledgeArticles: state.knowledgeArticles.map((k) => (k.id === action.id ? { ...k, ...action.patch } : k)),
+        knowledgeArticles: state.knowledgeArticles.map((k) =>
+          k.id === action.id ? { ...k, ...action.patch } : k,
+        ),
       };
     }
     case "DELETE_KNOWLEDGE_ARTICLE":
-      return { ...state, knowledgeArticles: state.knowledgeArticles.filter((k) => k.id !== action.id) };
+      return {
+        ...state,
+        knowledgeArticles: state.knowledgeArticles.filter((k) => k.id !== action.id),
+      };
+    case "MERGE_BOOTSTRAP":
+      // Aprovar/rejeitar uma ai_action (ou sincronizar e-mail) escreve direto
+      // no Supabase por fora do reducer — a UI só fica consistente de novo
+      // reconsultando o bootstrap (ver invalidateQueries(["domain-bootstrap"])
+      // em copilot.tsx/documents-page.tsx) e mesclando aqui as fatias que
+      // essas ações podem alterar. Só essas 5 — o resto do estado (clientes,
+      // comunicações, automações, etc.) não é afetado por elas e fica intacto.
+      return {
+        ...state,
+        pendencies: action.pendencies,
+        tasks: action.tasks,
+        obligations: action.obligations,
+        documents: action.documents,
+        activityLog: action.timelineEvents,
+      };
     default:
       return state;
   }
 }
 
 type DomainBootstrap = {
+  role: AppRole;
   tasks: Task[];
   pendencies: Pendency[];
   obligations: Obligation[];
@@ -1003,14 +1412,18 @@ type DomainBootstrap = {
   projects: Project[];
   knowledgeArticles: KnowledgeArticle[];
   timelineEvents: TimelineEvent[];
+  documents: ClientDocument[];
+  communications: Communication[];
+  announcements: Announcement[];
 };
 
 function initialState(bootstrap: DomainBootstrap): StoreState {
   return {
     pendencies: bootstrap.pendencies,
     tasks: bootstrap.tasks,
-    communications: seedCommunications,
-    documents: seedDocuments,
+    communications: bootstrap.communications,
+    documents: bootstrap.documents,
+    announcements: bootstrap.announcements,
     obligations: bootstrap.obligations,
     automations: seedAutomations,
     clients: bootstrap.clients,
@@ -1033,7 +1446,10 @@ function initialState(bootstrap: DomainBootstrap): StoreState {
  * (Action Engine intacto); isso só espelha o resultado no banco, por id, sem
  * duplicar regra de negócio. Falha de rede vira toast — não falha silenciosa.
  */
-function useSyncEntities<T extends { id: string }>(rows: T[], upsert: (row: T) => Promise<unknown>) {
+function useSyncEntities<T extends { id: string }>(
+  rows: T[],
+  upsert: (row: T) => Promise<unknown>,
+) {
   const [lastSynced] = useState(() => new Map(rows.map((r) => [r.id, JSON.stringify(r)])));
   const syncing = useRef(new Set<string>());
   useEffect(() => {
@@ -1043,7 +1459,11 @@ function useSyncEntities<T extends { id: string }>(rows: T[], upsert: (row: T) =
       syncing.current.add(row.id);
       upsert(row)
         .then(() => lastSynced.set(row.id, serialized))
-        .catch(() => toast.error("Falha ao salvar no banco — a alteração pode não persistir depois de atualizar a página."))
+        .catch(() =>
+          toast.error(
+            "Falha ao salvar no banco — a alteração pode não persistir depois de atualizar a página.",
+          ),
+        )
         .finally(() => syncing.current.delete(row.id));
     }
   }, [rows, upsert, lastSynced]);
@@ -1055,12 +1475,15 @@ type ConfirmOptions = {
   impact: "operacional" | "informativo";
   confirmLabel?: string;
   successMessage?: string;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 };
 
 type OfficeStoreValue = StoreState & {
   createPendency: (input: NewPendencyInput) => void;
-  updatePendency: (id: string, patch: Partial<Pick<Pendency, "status" | "priority" | "dueDate" | "assignee">>) => void;
+  updatePendency: (
+    id: string,
+    patch: Partial<Pick<Pendency, "status" | "priority" | "dueDate" | "assignee">>,
+  ) => void;
   completePendency: (id: string) => void;
   createTaskFromPendency: (pendencyId: string) => void;
   createCommunicationFromPendency: (pendencyId: string) => void;
@@ -1075,12 +1498,16 @@ type OfficeStoreValue = StoreState & {
   completeTask: (taskId: string) => void;
   logCapacityDecision: (kind: string, title: string, detail: string) => void;
   createObligation: (input: NewObligationInput) => void;
-  updateObligation: (id: string, patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">>) => void;
+  updateObligation: (
+    id: string,
+    patch: Partial<Pick<Obligation, "status" | "priority" | "dueDate" | "assignee">>,
+  ) => void;
   toggleChecklistItem: (obligationId: string, itemId: string) => void;
   createPendencyFromObligation: (obligationId: string) => void;
-  uploadDocument: (input: NewDocumentInput) => void;
-  processDocument: (documentId: string) => void;
+  uploadDocument: (input: NewDocumentInput) => Promise<void>;
+  processDocument: (documentId: string) => Promise<void>;
   assignMessage: (id: string, assignee: string) => void;
+  assignCommunicationClient: (id: string, clientId: string) => void;
   updateMessageStatus: (id: string, status: CommunicationStatus) => void;
   sendReply: (messageId: string, content: string) => void;
   createClientMessage: (clientId: string, content: string) => void;
@@ -1094,9 +1521,15 @@ type OfficeStoreValue = StoreState & {
   createProcess: (input: NewProcessInput) => void;
   updateProcess: (id: string, patch: Partial<Pick<Process, "progress" | "slaOk">>) => void;
   createProject: (input: NewProjectInput) => void;
-  updateProject: (id: string, patch: Partial<Pick<Project, "status" | "progress" | "dueDate">>) => void;
+  updateProject: (
+    id: string,
+    patch: Partial<Pick<Project, "status" | "progress" | "dueDate">>,
+  ) => void;
   createKnowledgeArticle: (input: NewKnowledgeArticleInput) => void;
-  updateKnowledgeArticle: (id: string, patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">>) => void;
+  updateKnowledgeArticle: (
+    id: string,
+    patch: Partial<Pick<KnowledgeArticle, "title" | "category" | "summary" | "content">>,
+  ) => void;
   deleteKnowledgeArticle: (id: string) => void;
   confirmAction: (options: ConfirmOptions) => void;
 };
@@ -1120,7 +1553,12 @@ export function OfficeStoreProvider({ children }: { children: ReactNode }) {
 
   if (bootstrap.isPending) return <StoreBootstrapState />;
   if (bootstrap.isError) {
-    return <StoreBootstrapState error={bootstrap.error instanceof Error ? bootstrap.error.message : "Erro desconhecido."} onRetry={() => void bootstrap.refetch()} />;
+    return (
+      <StoreBootstrapState
+        error={bootstrap.error instanceof Error ? bootstrap.error.message : "Erro desconhecido."}
+        onRetry={() => void bootstrap.refetch()}
+      />
+    );
   }
 
   return <OfficeStoreProviderInner initial={bootstrap.data}>{children}</OfficeStoreProviderInner>;
@@ -1133,33 +1571,88 @@ function StoreBootstrapState({ error, onRetry }: { error?: string; onRetry?: () 
         <ContaAILogo variant="horizontal" size={36} />
         {error ? (
           <>
-            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar os dados do escritório no Supabase.<br />{error}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Não foi possível carregar os dados do escritório no Supabase.
+              <br />
+              {error}
+            </p>
             {onRetry && (
-              <button onClick={onRetry} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+              <button
+                onClick={onRetry}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+              >
                 Tentar novamente
               </button>
             )}
           </>
         ) : (
-          <p className="animate-pulse text-sm text-muted-foreground">Carregando dados do escritório…</p>
+          <p className="animate-pulse text-sm text-muted-foreground">
+            Carregando dados do escritório…
+          </p>
         )}
       </div>
     </div>
   );
 }
 
-function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootstrap; children: ReactNode }) {
+function OfficeStoreProviderInner({
+  initial,
+  children,
+}: {
+  initial: DomainBootstrap;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(reducer, initial, initialState);
   const [pending, setPending] = useState<ConfirmOptions | null>(null);
 
+  // useReducer só roda o inicializador (initialState) na primeira montagem —
+  // um refetch de ["domain-bootstrap"] (ex.: depois de aprovar uma ai_action,
+  // que grava direto no Supabase por fora do reducer) muda `initial`, mas sem
+  // isto o estado local nunca refletiria a escrita, mesmo com a query já
+  // atualizada. Só mescla as fatias que essas escritas por fora do reducer
+  // podem afetar (ver MERGE_BOOTSTRAP) — nunca roda na primeira montagem,
+  // que já usou `initial` via initialState acima.
+  const isFirstMount = useRef(true);
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    dispatch({
+      type: "MERGE_BOOTSTRAP",
+      pendencies: initial.pendencies,
+      tasks: initial.tasks,
+      obligations: initial.obligations,
+      documents: initial.documents,
+      timelineEvents: initial.timelineEvents,
+    });
+  }, [initial]);
+
   const persistTaskFn = useCallback((row: Task) => persistTask({ data: row }), []);
   const persistPendencyFn = useCallback((row: Pendency) => persistPendency({ data: row }), []);
-  const persistObligationFn = useCallback((row: Obligation) => persistObligation({ data: row }), []);
+  const persistObligationFn = useCallback(
+    (row: Obligation) => persistObligation({ data: row }),
+    [],
+  );
   const persistClientFn = useCallback((row: Client) => persistClient({ data: row }), []);
   const persistProcessFn = useCallback((row: Process) => persistProcess({ data: row }), []);
   const persistProjectFn = useCallback((row: Project) => persistProject({ data: row }), []);
-  const persistKnowledgeArticleFn = useCallback((row: KnowledgeArticle) => persistKnowledgeArticle({ data: row }), []);
-  const persistTimelineEventFn = useCallback((row: TimelineEvent) => persistTimelineEvent({ data: row }), []);
+  const persistKnowledgeArticleFn = useCallback(
+    (row: KnowledgeArticle) => persistKnowledgeArticle({ data: row }),
+    [],
+  );
+  const persistTimelineEventFn = useCallback(
+    (row: TimelineEvent) => persistTimelineEvent({ data: row }),
+    [],
+  );
+  const persistDocumentFn = useCallback(
+    (row: ClientDocument) => persistDocument({ data: row }),
+    [],
+  );
+  const persistCommunicationFn = useCallback(
+    (row: Communication) => persistCommunication({ data: row }),
+    [],
+  );
   useSyncEntities(state.tasks, persistTaskFn);
   useSyncEntities(state.pendencies, persistPendencyFn);
   useSyncEntities(state.obligations, persistObligationFn);
@@ -1167,22 +1660,37 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
   useSyncEntities(state.processes, persistProcessFn);
   useSyncEntities(state.projects, persistProjectFn);
   useSyncEntities(state.knowledgeArticles, persistKnowledgeArticleFn);
+  useSyncEntities(state.documents, persistDocumentFn);
+  useSyncEntities(state.communications, persistCommunicationFn);
   useSyncEntities(state.activityLog, persistTimelineEventFn);
 
   const confirmAction = useCallback((options: ConfirmOptions) => {
     if (options.impact === "informativo") {
-      options.onConfirm();
-      if (options.successMessage) toast.success(options.successMessage);
+      Promise.resolve(options.onConfirm())
+        .then(() => {
+          if (options.successMessage) toast.success(options.successMessage);
+        })
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : "Falha ao executar a ação.");
+        });
       return;
     }
     setPending(options);
   }, []);
 
+  // Espera onConfirm terminar antes de anunciar sucesso — sem isto, uma
+  // falha (rede, RLS, ação de IA já decidida por outra requisição) mostrava
+  // "Ação executada." e fechava o diálogo antes mesmo do erro acontecer,
+  // deixando o usuário sem nenhum sinal de que nada mudou de verdade.
   const runPending = useCallback(() => {
     if (!pending) return;
-    pending.onConfirm();
-    toast.success(pending.successMessage ?? "Ação executada.");
+    const current = pending;
     setPending(null);
+    Promise.resolve(current.onConfirm())
+      .then(() => toast.success(current.successMessage ?? "Ação executada."))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Falha ao executar a ação.");
+      });
   }, [pending]);
 
   const value = useMemo<OfficeStoreValue>(
@@ -1191,32 +1699,58 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
       createPendency: (input) => dispatch({ type: "CREATE_PENDENCY", input }),
       updatePendency: (id, patch) => dispatch({ type: "UPDATE_PENDENCY", id, patch }),
       completePendency: (id) => dispatch({ type: "COMPLETE_PENDENCY", id }),
-      createTaskFromPendency: (pendencyId) => dispatch({ type: "CREATE_TASK_FROM_PENDENCY", pendencyId }),
-      createCommunicationFromPendency: (pendencyId) => dispatch({ type: "CREATE_COMMUNICATION_FROM_PENDENCY", pendencyId }),
-      createTaskForClient: (clientId, title) => dispatch({ type: "CREATE_TASK_FOR_CLIENT", clientId, title }),
-      createCommercialRecommendation: (clientId, title, description) => dispatch({ type: "CREATE_COMMERCIAL_RECOMMENDATION", clientId, title, description }),
+      createTaskFromPendency: (pendencyId) =>
+        dispatch({ type: "CREATE_TASK_FROM_PENDENCY", pendencyId }),
+      createCommunicationFromPendency: (pendencyId) =>
+        dispatch({ type: "CREATE_COMMUNICATION_FROM_PENDENCY", pendencyId }),
+      createTaskForClient: (clientId, title) =>
+        dispatch({ type: "CREATE_TASK_FOR_CLIENT", clientId, title }),
+      createCommercialRecommendation: (clientId, title, description) =>
+        dispatch({ type: "CREATE_COMMERCIAL_RECOMMENDATION", clientId, title, description }),
       resolveInsight: (id) => dispatch({ type: "RESOLVE_INSIGHT", id }),
       ignoreInsight: (id) => dispatch({ type: "IGNORE_INSIGHT", id }),
       resolveAlert: (id) => dispatch({ type: "RESOLVE_ALERT", id }),
       markChurnReviewed: (clientId) => dispatch({ type: "MARK_CHURN_REVIEWED", clientId }),
       reassignTask: (taskId, assignee) => dispatch({ type: "REASSIGN_TASK", taskId, assignee }),
-      reprioritizeTask: (taskId, priority) => dispatch({ type: "REPRIORITIZE_TASK", taskId, priority }),
+      reprioritizeTask: (taskId, priority) =>
+        dispatch({ type: "REPRIORITIZE_TASK", taskId, priority }),
       completeTask: (taskId) => dispatch({ type: "COMPLETE_TASK", taskId }),
-      logCapacityDecision: (kind, title, detail) => dispatch({ type: "LOG_CAPACITY_DECISION", kind, title, detail }),
+      logCapacityDecision: (kind, title, detail) =>
+        dispatch({ type: "LOG_CAPACITY_DECISION", kind, title, detail }),
       createObligation: (input) => dispatch({ type: "CREATE_OBLIGATION", input }),
       updateObligation: (id, patch) => dispatch({ type: "UPDATE_OBLIGATION", id, patch }),
-      toggleChecklistItem: (obligationId, itemId) => dispatch({ type: "TOGGLE_CHECKLIST_ITEM", obligationId, itemId }),
-      createPendencyFromObligation: (obligationId) => dispatch({ type: "CREATE_PENDENCY_FROM_OBLIGATION", obligationId }),
-      uploadDocument: (input) => dispatch({ type: "UPLOAD_DOCUMENT", input }),
-      processDocument: (documentId) => dispatch({ type: "PROCESS_DOCUMENT", documentId }),
+      toggleChecklistItem: (obligationId, itemId) =>
+        dispatch({ type: "TOGGLE_CHECKLIST_ITEM", obligationId, itemId }),
+      createPendencyFromObligation: (obligationId) =>
+        dispatch({ type: "CREATE_PENDENCY_FROM_OBLIGATION", obligationId }),
+      uploadDocument: async (input) => {
+        const formData = new FormData();
+        formData.set("file", input.file);
+        formData.set("clientId", input.clientId);
+        formData.set("type", input.type);
+        formData.set("category", input.category);
+        formData.set("competence", input.competence);
+        formData.set("assignee", input.assignee);
+        const doc = await uploadStaffDocumentFn({ data: formData });
+        dispatch({ type: "ADD_UPLOADED_DOCUMENT", doc });
+      },
+      processDocument: async (documentId) => {
+        const { document, timelineEvent } = await processDocumentFn({ data: { documentId } });
+        dispatch({ type: "PROCESSED_DOCUMENT", document, timelineEvent });
+      },
       assignMessage: (id, assignee) => dispatch({ type: "ASSIGN_MESSAGE", id, assignee }),
+      assignCommunicationClient: (id, clientId) =>
+        dispatch({ type: "ASSIGN_COMMUNICATION_CLIENT", id, clientId }),
       updateMessageStatus: (id, status) => dispatch({ type: "UPDATE_MESSAGE_STATUS", id, status }),
       sendReply: (messageId, content) => dispatch({ type: "SEND_REPLY", messageId, content }),
-      createClientMessage: (clientId, content) => dispatch({ type: "CREATE_CLIENT_MESSAGE", clientId, content }),
+      createClientMessage: (clientId, content) =>
+        dispatch({ type: "CREATE_CLIENT_MESSAGE", clientId, content }),
       toggleAutomationStatus: (id) => dispatch({ type: "TOGGLE_AUTOMATION_STATUS", id }),
-      runAutomation: (automationId, matches) => dispatch({ type: "RUN_AUTOMATION", automationId, matches }),
+      runAutomation: (automationId, matches) =>
+        dispatch({ type: "RUN_AUTOMATION", automationId, matches }),
       createAutomation: (input) => dispatch({ type: "CREATE_AUTOMATION", input }),
-      redistributeFromInsight: (insightId) => dispatch({ type: "REDISTRIBUTE_FROM_INSIGHT", insightId }),
+      redistributeFromInsight: (insightId) =>
+        dispatch({ type: "REDISTRIBUTE_FROM_INSIGHT", insightId }),
       dismissLiveInsight: (id) => dispatch({ type: "DISMISS_LIVE_INSIGHT", id }),
       createTask: (input) => dispatch({ type: "CREATE_TASK", input }),
       updateClient: (id, patch) => dispatch({ type: "UPDATE_CLIENT", id, patch }),
@@ -1225,10 +1759,15 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
       createProject: (input) => dispatch({ type: "CREATE_PROJECT", input }),
       updateProject: (id, patch) => dispatch({ type: "UPDATE_PROJECT", id, patch }),
       createKnowledgeArticle: (input) => dispatch({ type: "CREATE_KNOWLEDGE_ARTICLE", input }),
-      updateKnowledgeArticle: (id, patch) => dispatch({ type: "UPDATE_KNOWLEDGE_ARTICLE", id, patch }),
+      updateKnowledgeArticle: (id, patch) =>
+        dispatch({ type: "UPDATE_KNOWLEDGE_ARTICLE", id, patch }),
       deleteKnowledgeArticle: (id) => {
         dispatch({ type: "DELETE_KNOWLEDGE_ARTICLE", id });
-        void deleteKnowledgeArticleFn({ data: { id } }).catch(() => toast.error("Falha ao excluir artigo no banco — pode reaparecer depois de atualizar a página."));
+        void deleteKnowledgeArticleFn({ data: { id } }).catch(() =>
+          toast.error(
+            "Falha ao excluir artigo no banco — pode reaparecer depois de atualizar a página.",
+          ),
+        );
       },
       confirmAction,
     }),
@@ -1246,7 +1785,9 @@ function OfficeStoreProviderInner({ initial, children }: { initial: DomainBootst
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={runPending}>{pending?.confirmLabel ?? "Confirmar"}</AlertDialogAction>
+            <AlertDialogAction onClick={runPending}>
+              {pending?.confirmLabel ?? "Confirmar"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

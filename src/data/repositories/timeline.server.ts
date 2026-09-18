@@ -1,4 +1,4 @@
-import { supabaseDomain } from "./domain-client.server";
+import type { DomainClient } from "./domain-client.server";
 import type { TimelineEvent } from "@/data/office";
 import type { TimelineEventRow } from "./domain-types";
 
@@ -13,9 +13,9 @@ function fromRow(row: TimelineEventRow): TimelineEvent {
   };
 }
 
-/** Histórico completo do workspace — Customer 360 filtra por clientId no componente, igual já faz hoje com o activityLog em memória. */
-export async function listTimelineEvents(workspaceId: string): Promise<TimelineEvent[]> {
-  const { data, error } = await supabaseDomain
+/** Histórico completo do workspace — só staff (timeline_events_staff_read); Customer 360 filtra por clientId no componente, igual já faz hoje com o activityLog em memória. */
+export async function listTimelineEvents(client: DomainClient, workspaceId: string): Promise<TimelineEvent[]> {
+  const { data, error } = await client
     .from("timeline_events")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -28,8 +28,8 @@ export async function listTimelineEvents(workspaceId: string): Promise<TimelineE
   return (data ?? []).map(fromRow);
 }
 
-export async function upsertTimelineEvent(workspaceId: string, event: TimelineEvent): Promise<void> {
-  const { error } = await supabaseDomain.from("timeline_events").upsert({
+export async function upsertTimelineEvent(client: DomainClient, workspaceId: string, event: TimelineEvent): Promise<void> {
+  const { error } = await client.from("timeline_events").upsert({
     id: event.id,
     workspace_id: workspaceId,
     client_id: event.clientId,

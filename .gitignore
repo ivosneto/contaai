@@ -23,6 +23,7 @@ dist-ssr
 # Segredos locais — nunca commitar (contém SUPABASE_SERVICE_ROLE_KEY)
 .env
 .env.*
+!.env.example
 
 # Cache local do Supabase CLI
 supabase/.temp/

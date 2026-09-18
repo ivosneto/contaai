@@ -1,4 +1,11 @@
-import type { Client, Communication, CommunicationClassification, CommunicationPriority, CommunicationSentiment, Insight } from "@/data/office";
+import type {
+  Client,
+  Communication,
+  CommunicationClassification,
+  CommunicationPriority,
+  CommunicationSentiment,
+  Insight,
+} from "@/data/office";
 
 /**
  * Inbox unificada — puro, sem UI, sem importar valores de office.ts em
@@ -8,9 +15,12 @@ import type { Client, Communication, CommunicationClassification, CommunicationP
  * sempre um rascunho para o usuário revisar e confirmar.
  */
 
-export const CLASSIFIER_DEMO_DISCLAIMER = "Classificação automática por regras de palavras-chave (MVP) — não é um modelo de NLP treinado.";
-export const COMMUNICATION_DEMO_DISCLAIMER = "E-mail e WhatsApp são simulados com dados de demonstração nesta versão — sem integração real com provedores externos.";
-export const REPLY_DRAFT_DISCLAIMER = "Rascunho gerado por modelo (MVP) — revise antes de enviar. Nenhuma resposta é enviada automaticamente.";
+export const CLASSIFIER_DEMO_DISCLAIMER =
+  "Classificação automática por regras de palavras-chave (MVP) — não é um modelo de NLP treinado.";
+export const COMMUNICATION_DEMO_DISCLAIMER =
+  "E-mail e WhatsApp são simulados com dados de demonstração nesta versão — sem integração real com provedores externos.";
+export const REPLY_DRAFT_DISCLAIMER =
+  "Rascunho gerado por modelo (MVP) — revise antes de enviar. Nenhuma resposta é enviada automaticamente.";
 
 export type MessageClassification = {
   category: CommunicationClassification;
@@ -99,7 +109,13 @@ export function classifyContent(content: string): MessageClassification {
   const text = content.toLowerCase();
   const rule = RULES.find((r) => r.test(text));
   if (!rule) {
-    return { category: "Outros", sentiment: "Neutro", priority: "Baixa", requiresAction: false, suggestedAction: "Sem ação clara identificada — revisar manualmente." };
+    return {
+      category: "Outros",
+      sentiment: "Neutro",
+      priority: "Baixa",
+      requiresAction: false,
+      suggestedAction: "Sem ação clara identificada — revisar manualmente.",
+    };
   }
   return {
     category: rule.category,
@@ -111,14 +127,22 @@ export function classifyContent(content: string): MessageClassification {
 }
 
 const REPLY_TEMPLATES: Record<CommunicationClassification, (subject: string) => string> = {
-  Documento: (s) => `Recebemos sua solicitação sobre "${s}". Você pode enviar os documentos pelo portal do cliente ou responder esta mensagem com os arquivos em anexo. Qualquer dúvida, estamos à disposição.`,
-  Dúvida: (s) => `Sobre "${s}": já estamos verificando os detalhes e retornamos com uma explicação completa em breve. Fique à vontade para complementar sua dúvida por aqui.`,
-  Cobrança: (s) => `Sobre "${s}": estamos verificando a situação junto ao time financeiro e retornamos com uma posição em até 1 dia útil.`,
-  Solicitação: (s) => `Recebemos sua solicitação sobre "${s}" e já encaminhamos para o time responsável. Assim que tivermos uma atualização, avisamos por aqui.`,
-  Reclamação: (s) => `Sentimos muito pelo ocorrido em relação a "${s}". Já estamos analisando o caso com prioridade e voltamos com uma solução o quanto antes.`,
-  Comercial: (s) => `Que bom o seu interesse em relação a "${s}"! Vamos preparar as informações e entrar em contato para avançarmos.`,
-  Urgente: (s) => `Entendemos a urgência sobre "${s}" e já priorizamos o atendimento. Retornamos com uma posição ainda hoje.`,
-  Outros: (s) => `Recebemos sua mensagem sobre "${s}" e já estamos avaliando internamente. Qualquer novidade, retornamos por aqui.`,
+  Documento: (s) =>
+    `Recebemos sua solicitação sobre "${s}". Você pode enviar os documentos pelo portal do cliente ou responder esta mensagem com os arquivos em anexo. Qualquer dúvida, estamos à disposição.`,
+  Dúvida: (s) =>
+    `Sobre "${s}": já estamos verificando os detalhes e retornamos com uma explicação completa em breve. Fique à vontade para complementar sua dúvida por aqui.`,
+  Cobrança: (s) =>
+    `Sobre "${s}": estamos verificando a situação junto ao time financeiro e retornamos com uma posição em até 1 dia útil.`,
+  Solicitação: (s) =>
+    `Recebemos sua solicitação sobre "${s}" e já encaminhamos para o time responsável. Assim que tivermos uma atualização, avisamos por aqui.`,
+  Reclamação: (s) =>
+    `Sentimos muito pelo ocorrido em relação a "${s}". Já estamos analisando o caso com prioridade e voltamos com uma solução o quanto antes.`,
+  Comercial: (s) =>
+    `Que bom o seu interesse em relação a "${s}"! Vamos preparar as informações e entrar em contato para avançarmos.`,
+  Urgente: (s) =>
+    `Entendemos a urgência sobre "${s}" e já priorizamos o atendimento. Retornamos com uma posição ainda hoje.`,
+  Outros: (s) =>
+    `Recebemos sua mensagem sobre "${s}" e já estamos avaliando internamente. Qualquer novidade, retornamos por aqui.`,
 };
 
 export type ReplyDraftInput = {
@@ -129,7 +153,12 @@ export type ReplyDraftInput = {
 };
 
 /** Gera um RASCUNHO de resposta por modelo — o usuário sempre revisa e confirma antes de enviar. */
-export function generateReplyDraft({ recipientName, subject, category, officeName }: ReplyDraftInput): string {
+export function generateReplyDraft({
+  recipientName,
+  subject,
+  category,
+  officeName,
+}: ReplyDraftInput): string {
   const firstName = recipientName.split(" ")[0] ?? recipientName;
   const body = REPLY_TEMPLATES[category](subject);
   return `Olá, ${firstName}!\n\n${body}\n\nAtenciosamente,\nEquipe ${officeName}`;
@@ -145,23 +174,35 @@ export type CommunicationInsightClient = Pick<Client, "id" | "name" | "departmen
 
 const TODAY = "2026-09-14";
 
-export function computeCommunicationInsights(communications: Communication[], clients: CommunicationInsightClient[]): Insight[] {
+export function computeCommunicationInsights(
+  communications: Communication[],
+  clients: CommunicationInsightClient[],
+): Insight[] {
   const insights: Insight[] = [];
   const clientOf = (clientId: string) => clients.find((c) => c.id === clientId);
-  const openActionable = communications.filter((m) => m.requiresAction);
+  // Mensagens sem cliente identificado (e-mail sincronizado com baixa confiança de matching,
+  // ver src/lib/email/client-matching.ts) não geram insight "de cliente" — precisam de
+  // triagem manual primeiro (vincular um cliente), não de uma recomendação atribuída a ninguém.
+  const openActionable = communications.filter((m) => m.requiresAction && m.clientId !== null);
 
-  const urgent = openActionable.filter((m) => m.classification === "Urgente" || m.priority === "Crítica");
+  const urgent = openActionable.filter(
+    (m) => m.classification === "Urgente" || m.priority === "Crítica",
+  );
   for (const m of urgent) {
-    const client = clientOf(m.clientId);
+    const clientId = m.clientId!;
+    const client = clientOf(clientId);
     insights.push({
       id: `inbox-urgent-${m.id}`,
       kind: "Problema",
       severity: "Crítica",
-      title: `${client?.name ?? m.clientId}: mensagem urgente aguardando resposta — "${m.subject}"`,
-      clientId: m.clientId,
+      title: `${client?.name ?? clientId}: mensagem urgente aguardando resposta — "${m.subject}"`,
+      clientId,
       ...(client ? { department: client.department } : {}),
       assignee: m.assignee,
-      evidence: [`Recebida via ${m.channel} em ${m.createdAt}, ainda sem resposta.`, m.suggestedAction],
+      evidence: [
+        `Recebida via ${m.channel} em ${m.createdAt}, ainda sem resposta.`,
+        m.suggestedAction,
+      ],
       impact: "Mensagem classificada como urgente ainda sem resposta.",
       recommendation: "Responder ou atribuir esta mensagem agora.",
       link: "/comunicacao",
@@ -173,16 +214,19 @@ export function computeCommunicationInsights(communications: Communication[], cl
 
   const complaints = openActionable.filter((m) => m.classification === "Reclamação");
   for (const m of complaints) {
-    const client = clientOf(m.clientId);
+    const clientId = m.clientId!;
+    const client = clientOf(clientId);
     insights.push({
       id: `inbox-complaint-${m.id}`,
       kind: "Problema",
       severity: "Alta",
-      title: `${client?.name ?? m.clientId}: reclamação em aberto — "${m.subject}"`,
-      clientId: m.clientId,
+      title: `${client?.name ?? clientId}: reclamação em aberto — "${m.subject}"`,
+      clientId,
       ...(client ? { department: client.department } : {}),
       assignee: m.assignee,
-      evidence: [`Sentimento ${m.sentiment.toLowerCase()} detectado em mensagem de ${m.createdAt}.`],
+      evidence: [
+        `Sentimento ${m.sentiment.toLowerCase()} detectado em mensagem de ${m.createdAt}.`,
+      ],
       impact: "Reclamação de cliente ainda sem tratativa registrada.",
       recommendation: "Priorizar resposta e considerar abrir pendência de acompanhamento.",
       link: "/comunicacao",
@@ -198,7 +242,9 @@ export function computeCommunicationInsights(communications: Communication[], cl
       kind: "Problema",
       severity: "Média",
       title: `${openActionable.length} mensagens exigem ação na Inbox`,
-      evidence: [`Volume de mensagens recebidas acima da capacidade de resposta atual (${openActionable.length} em aberto).`],
+      evidence: [
+        `Volume de mensagens recebidas acima da capacidade de resposta atual (${openActionable.length} em aberto).`,
+      ],
       impact: "Backlog de comunicação acumulando sem resposta ou atribuição.",
       recommendation: "Distribuir mensagens entre a equipe e responder as mais antigas primeiro.",
       link: "/comunicacao",

@@ -33,6 +33,7 @@ import { Route as RentabilidadeRouteImport } from './routes/rentabilidade'
 import { Route as SimuladorRouteImport } from './routes/simulador'
 import { Route as TarefasRouteImport } from './routes/tarefas'
 import { Route as ClientesClientIdRouteImport } from './routes/clientes.$clientId'
+import { Route as IntegracoesEmailCallbackRouteImport } from './routes/integracoes.email.callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -154,6 +155,12 @@ const ClientesClientIdRoute = ClientesClientIdRouteImport.update({
   path: '/$clientId',
   getParentRoute: () => ClientesRoute,
 } as any)
+const IntegracoesEmailCallbackRoute =
+  IntegracoesEmailCallbackRouteImport.update({
+    id: '/integracoes/email/callback',
+    path: '/integracoes/email/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/simulador': typeof SimuladorRoute
   '/tarefas': typeof TarefasRoute
   '/clientes/$clientId': typeof ClientesClientIdRoute
+  '/integracoes/email/callback': typeof IntegracoesEmailCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -206,6 +214,7 @@ export interface FileRoutesByTo {
   '/simulador': typeof SimuladorRoute
   '/tarefas': typeof TarefasRoute
   '/clientes/$clientId': typeof ClientesClientIdRoute
+  '/integracoes/email/callback': typeof IntegracoesEmailCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,6 +242,7 @@ export interface FileRoutesById {
   '/simulador': typeof SimuladorRoute
   '/tarefas': typeof TarefasRoute
   '/clientes/$clientId': typeof ClientesClientIdRoute
+  '/integracoes/email/callback': typeof IntegracoesEmailCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/tarefas'
     | '/clientes/$clientId'
+    | '/integracoes/email/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -287,6 +298,7 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/tarefas'
     | '/clientes/$clientId'
+    | '/integracoes/email/callback'
   id:
     | '__root__'
     | '/'
@@ -313,6 +325,7 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/tarefas'
     | '/clientes/$clientId'
+    | '/integracoes/email/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -339,6 +352,7 @@ export interface RootRouteChildren {
   RentabilidadeRoute: typeof RentabilidadeRoute
   SimuladorRoute: typeof SimuladorRoute
   TarefasRoute: typeof TarefasRoute
+  IntegracoesEmailCallbackRoute: typeof IntegracoesEmailCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -511,6 +525,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesClientIdRouteImport
       parentRoute: typeof ClientesRoute
     }
+    '/integracoes/email/callback': {
+      id: '/integracoes/email/callback'
+      path: '/integracoes/email/callback'
+      fullPath: '/integracoes/email/callback'
+      preLoaderRoute: typeof IntegracoesEmailCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -550,6 +571,7 @@ const rootRouteChildren: RootRouteChildren = {
   RentabilidadeRoute: RentabilidadeRoute,
   SimuladorRoute: SimuladorRoute,
   TarefasRoute: TarefasRoute,
+  IntegracoesEmailCallbackRoute: IntegracoesEmailCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
