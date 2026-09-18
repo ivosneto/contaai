@@ -20,6 +20,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Vercel CLI (project link + local prebuilt output)
+.vercel
+
 # Segredos locais — nunca commitar (contém SUPABASE_SERVICE_ROLE_KEY)
 .env
 .env.*
