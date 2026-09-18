@@ -8,15 +8,36 @@ import type { IntegrationDefinition } from "./types";
  */
 export const INTEGRATIONS: IntegrationDefinition[] = [
   {
-    id: "dominio",
-    name: "Domínio Sistemas",
+    id: "alterdata",
+    name: "Alterdata (eContador)",
     category: "dominio-fiscal",
     status: "mock",
     description:
-      "Sincronização de clientes, movimentos contábeis e apurações com o sistema fiscal/contábil do escritório.",
+      "Leitura de status de apuração e obrigações fiscais direto do eContador do escritório, via a API oficial (ePlugin).",
     feeds: ["obrigacoes", "financeiro"],
     disclaimer:
-      "Sem integração real com a API do Domínio. Obrigações e apurações continuam sendo geradas de forma determinística no protótipo.",
+      "Sem integração real ainda. A Alterdata expõe uma API REST/JSON documentada (ePlugin, autenticação JWT) — mas exige plano eContador Master do escritório-cliente e o catálogo completo de endpoints não está público; falta credencial real e mapeamento de endpoint para conectar. Ver src/lib/fiscal/. Obrigações continuam sendo geradas de forma determinística no protótipo.",
+  },
+  {
+    id: "sittax",
+    name: "Sittax",
+    category: "dominio-fiscal",
+    status: "mock",
+    description: "Leitura de resultado de apuração (DIFAL, ICMS-ST) direto do Sittax do escritório.",
+    feeds: ["obrigacoes"],
+    disclaimer:
+      "Sem integração real ainda. O Sittax tem uma 'API de Integração' documentada (chave de API), mas a documentação pública encontrada cobre principalmente importação de NF-e para dentro do Sittax — não está confirmado se a mesma API permite ler o resultado da apuração de volta. Precisa de conta de teste para confirmar antes de implementar.",
+  },
+  {
+    id: "gestta",
+    name: "Gestta",
+    category: "produtividade",
+    status: "mock",
+    description:
+      "Sincronização de tarefas e prazos de entrega do Gestta (gestão de processos do escritório) com a Central de Tarefas.",
+    feeds: ["tarefas"],
+    disclaimer:
+      "Sem integração real e nenhuma API pública de desenvolvedor foi encontrada — o Gestta documenta apenas uma integração própria com o Domínio (Thomson Reuters), não uma API aberta para terceiros. Precisa de contato direto com o time do Gestta para confirmar se existe alguma via de acesso.",
   },
   {
     id: "whatsapp",
