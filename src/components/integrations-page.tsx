@@ -17,7 +17,11 @@ import { useOfficeStore } from "@/data/store";
 import { clientById, contacts, employees, office } from "@/data/office";
 import { DOCUMENT_DEFAULT_CATEGORY } from "@/lib/documents-engine";
 import { INTEGRATIONS } from "@/integrations/providers/catalog";
-import { CATEGORY_LABEL, type IntegrationCategory } from "@/integrations/providers/types";
+import {
+  CATEGORY_LABEL,
+  type IntegrationCategory,
+  type IntegrationStatus,
+} from "@/integrations/providers/types";
 import {
   mockEmailProvider,
   mockGoogleDriveProvider,
@@ -45,6 +49,14 @@ const CATEGORIES: IntegrationCategory[] = [
 ];
 
 type BadgeTone = "good" | "warn" | "bad" | "brand" | "accent" | "neutral";
+
+/** Vocabulário único de status para o catálogo inteiro — ver IntegrationStatus (types.ts) para o que cada valor exige como evidência antes de ser usado. */
+const STATUS_BADGE: Record<IntegrationStatus, { tone: BadgeTone; label: string }> = {
+  real: { tone: "good", label: "Real" },
+  em_configuracao: { tone: "warn", label: "Em configuração" },
+  demo: { tone: "accent", label: "Demo" },
+  planejado: { tone: "neutral", label: "Planejado" },
+};
 
 /**
  * Card real do "E-mail (IMAP/SMTP)" do catálogo — status vem do backend
@@ -103,12 +115,12 @@ function EmailIntegrationCard() {
   const badge: { tone: BadgeTone; label: string } = syncing
     ? { tone: "brand", label: "Sincronizando" }
     : account?.status === "connected"
-      ? { tone: "good", label: "Conectado" }
+      ? { tone: "good", label: "Integrado" }
       : account?.status === "error"
         ? { tone: "bad", label: "Erro" }
         : account?.status === "disconnected"
           ? { tone: "neutral", label: "Desconectado" }
-          : { tone: "neutral", label: "Não configurado" };
+          : { tone: "warn", label: "Em configuração" };
 
   return (
     <div className="glass-soft rounded-xl p-4">
@@ -242,8 +254,7 @@ export function IntegrationsPage() {
         description="Workspace, equipe, departamentos e o catálogo de integrações externas do ContaAI."
         action={
           <Badge tone="warn">
-            <Settings className="mr-1 size-3" /> E-mail é real (Gmail OAuth) — as demais integrações
-            abaixo são mock
+            <Settings className="mr-1 size-3" /> 1 real · 2 em configuração · 2 demo · 7 planejadas
           </Badge>
         }
       />
@@ -259,21 +270,21 @@ export function IntegrationsPage() {
         <Kpi
           label="Colaboradores"
           value={String(employees.length)}
-          change="usuários ativos"
-          tone="brand"
+          change="dados de demonstração — equipe real ainda não gerenciada por aqui"
+          tone="warn"
           icon={Building2}
         />
         <Kpi
           label="Departamentos"
           value={String(office.departments.length)}
-          change={office.departments.join(", ")}
-          tone="brand"
+          change="dados de demonstração"
+          tone="warn"
           icon={Building2}
         />
         <Kpi
           label="Integrações"
           value={String(INTEGRATIONS.length)}
-          change="1 real (e-mail), demais em modo mock"
+          change="1 real, 2 em configuração, 2 demo, 7 planejadas"
           tone="warn"
           icon={Settings}
         />
@@ -282,9 +293,12 @@ export function IntegrationsPage() {
       <Glass className="mt-4 p-5">
         <h2 className="font-display text-lg font-semibold">Catálogo de integrações</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          E-mail (Gmail) é uma integração real — conecta via OAuth, sincroniza de verdade. As demais
-          já têm um contrato definido (ver <code>src/integrations/providers</code>) e um lugar claro
-          para plugar a API real quando existir, mas ainda não fazem nenhuma chamada de rede.
+          E-mail (Gmail) é real — conecta via OAuth, sincroniza de verdade. Alterdata/Sittax têm
+          autenticação, timeout e retry prontos, mas aguardam confirmação de endpoint/credencial
+          real (nunca simulam uma resposta). WhatsApp/Drive são demonstrações interativas — gravam
+          de verdade na Inbox/Documentos a partir de um payload de exemplo, nunca de uma mensagem
+          real. As demais têm só o contrato definido (ver <code>src/integrations/providers</code>),
+          sem nenhum código de conexão ainda.
         </p>
         <div className="mt-4 space-y-5">
           {CATEGORIES.map((cat) => {
@@ -303,7 +317,9 @@ export function IntegrationsPage() {
                       <div key={i.id} className="glass-soft rounded-xl p-4">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-semibold">{i.name}</p>
-                          <Badge tone="warn">Mock</Badge>
+                          <Badge tone={STATUS_BADGE[i.status].tone}>
+                            {STATUS_BADGE[i.status].label}
+                          </Badge>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">{i.description}</p>
                         <div className="mt-2 flex flex-wrap gap-1">

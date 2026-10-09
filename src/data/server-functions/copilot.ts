@@ -324,6 +324,53 @@ export async function executeApprovedAiAction(ctx: AuthContext, actionId: string
         evidenceDocumentId: documentId,
       });
       result = { obligationId, documentId };
+    } else if (action.kind === "create-opportunity") {
+      const clientId = String(action.payload["clientId"] ?? "");
+      const { listClients } = await import("@/data/repositories/clients.server");
+      const clients = await listClients(ctx.client, ctx.workspaceId);
+      const client = clients.find((c) => c.id === clientId);
+      if (!client) throw new Error(`Cliente ${clientId} não encontrado neste workspace.`);
+
+      const targetFee = Number(action.payload["targetFee"] ?? action.payload["currentFee"] ?? 0);
+      const evidence = Array.isArray(action.payload["evidence"])
+        ? (action.payload["evidence"] as unknown[]).filter((e): e is string => typeof e === "string")
+        : [];
+      const recommendedMin = Number(action.payload["recommendedMin"] ?? targetFee);
+      const recommendedMax = Number(action.payload["recommendedMax"] ?? targetFee);
+
+      const { upsertOpportunity } = await import("@/data/repositories/opportunities.server");
+      const id = `opp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const opportunity: import("@/data/office").Opportunity = {
+        id,
+        clientId,
+        company: client.name,
+        contact: "",
+        seller: client.owner,
+        source: "Revenue Intelligence",
+        services: [],
+        mrr: targetFee,
+        setup: 0,
+        probability: 50,
+        stage: "Diagnóstico",
+        expectedAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        origin: "Revenue Intelligence",
+        reasoning: evidence,
+        currentFee: Number(action.payload["currentFee"] ?? 0),
+        recommendation: `${String(action.payload["situation"] ?? "")} Faixa recomendada: ${recommendedMin}–${recommendedMax}/mês.`,
+        nextAction: "Validar com o cliente a proposta de reajuste",
+      };
+      await upsertOpportunity(ctx.client, ctx.workspaceId, opportunity, action.id);
+
+      const { upsertTimelineEvent } = await import("@/data/repositories/timeline.server");
+      await upsertTimelineEvent(ctx.client, ctx.workspaceId, {
+        id: `tl-${id}`,
+        clientId,
+        date: new Date().toISOString().slice(0, 10),
+        type: "oportunidade",
+        title: "Oportunidade comercial criada (Revenue Intelligence)",
+        detail: opportunity.recommendation ?? opportunity.company,
+      });
+      result = { opportunityId: id };
     } else {
       throw new Error(`Tipo de ação de IA desconhecido: "${action.kind}".`);
     }

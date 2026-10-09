@@ -1,17 +1,17 @@
 import type { IntegrationDefinition } from "./types";
 
 /**
- * Catálogo de integrações externas do ContaAI. Todas em status "mock" — é a
- * lista honesta do que a arquitetura já está pronta para receber, não uma
- * lista de conexões reais. Ver `types.ts` para o contrato que uma
- * integração real deve implementar para substituir o mock aqui.
+ * Catálogo de integrações externas do ContaAI — status honesto por item
+ * (ver IntegrationStatus em types.ts para o que cada valor exige como
+ * evidência). Nenhum item aqui é apresentado como mais pronto do que
+ * realmente está.
  */
 export const INTEGRATIONS: IntegrationDefinition[] = [
   {
     id: "alterdata",
     name: "Alterdata (eContador)",
     category: "dominio-fiscal",
-    status: "mock",
+    status: "em_configuracao",
     description:
       "Leitura de status de apuração e obrigações fiscais direto do eContador do escritório, via a API oficial (ePlugin).",
     feeds: ["obrigacoes", "financeiro"],
@@ -22,28 +22,29 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "sittax",
     name: "Sittax",
     category: "dominio-fiscal",
-    status: "mock",
-    description: "Leitura de resultado de apuração (DIFAL, ICMS-ST) direto do Sittax do escritório.",
+    status: "em_configuracao",
+    description:
+      "Leitura de resultado de apuração (DIFAL, ICMS-ST) direto do Sittax do escritório.",
     feeds: ["obrigacoes"],
     disclaimer:
-      "Sem integração real ainda. O Sittax tem uma 'API de Integração' documentada (chave de API), mas a documentação pública encontrada cobre principalmente importação de NF-e para dentro do Sittax — não está confirmado se a mesma API permite ler o resultado da apuração de volta. Precisa de conta de teste para confirmar antes de implementar.",
+      "Sem integração real ainda. O Sittax tem uma 'API de Integração' documentada (chave de API), mas a documentação pública encontrada cobre o fluxo de ENTRADA (importação de NF-e para dentro do Sittax) — o fluxo que o ContaAI precisa é o INVERSO (ler o resultado da apuração de volta), e isso não está confirmado nem nessa API nem em outra. Nem o endpoint de leitura nem o nome do header de autenticação da chave de API estão confirmados. Ver src/lib/fiscal/sittax-provider.server.ts. Precisa de conta de teste + suporte da Sittax para confirmar os dois antes de implementar.",
   },
   {
     id: "gestta",
     name: "Gestta",
     category: "produtividade",
-    status: "mock",
+    status: "planejado",
     description:
       "Sincronização de tarefas e prazos de entrega do Gestta (gestão de processos do escritório) com a Central de Tarefas.",
     feeds: ["tarefas"],
     disclaimer:
-      "Sem integração real e nenhuma API pública de desenvolvedor foi encontrada — o Gestta documenta apenas uma integração própria com o Domínio (Thomson Reuters), não uma API aberta para terceiros. Precisa de contato direto com o time do Gestta para confirmar se existe alguma via de acesso.",
+      "Descartado por ora — sem caminho técnico confirmado, não é um 'em breve'. Nenhuma API pública de desenvolvedor foi encontrada (pesquisa feita, não suposição): o Gestta foi adquirido pela Thomson Reuters e hoje é vendido como módulo do Domínio Contábil; a única API do Domínio confirmada publicamente é de importação de documentos fiscais, sem nenhuma relação com tarefas/prazos. Reavaliar só se o contato direto com Gestta/Thomson Reuters revelar um programa de parceiros não documentado publicamente.",
   },
   {
     id: "whatsapp",
     name: "WhatsApp Business",
     category: "mensageria",
-    status: "mock",
+    status: "demo",
     description: "Recebimento e envio de mensagens de clientes direto na Inbox unificada.",
     feeds: ["comunicacao"],
     disclaimer:
@@ -64,7 +65,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "google-drive",
     name: "Google Drive",
     category: "armazenamento",
-    status: "mock",
+    status: "demo",
     description:
       "Leitura de documentos enviados pelo cliente numa pasta compartilhada, alimentando o pipeline de Documentos Inteligentes.",
     feeds: ["documentos"],
@@ -75,7 +76,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "sheets",
     name: "Excel / Google Sheets",
     category: "planilhas",
-    status: "mock",
+    status: "planejado",
     description:
       "Importação e exportação de planilhas (clientes, honorários, lançamentos) para os módulos financeiro e de clientes.",
     feeds: ["financeiro", "comercial"],
@@ -86,7 +87,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "trello",
     name: "Trello",
     category: "produtividade",
-    status: "mock",
+    status: "planejado",
     description:
       "Sincronização de tarefas e quadros de projeto com a Central de Tarefas e Projetos.",
     feeds: ["tarefas"],
@@ -97,7 +98,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "crm-externo",
     name: "CRM externo",
     category: "crm",
-    status: "mock",
+    status: "planejado",
     description:
       "Sincronização de leads e oportunidades comerciais com o pipeline do módulo Comercial.",
     feeds: ["comercial"],
@@ -108,7 +109,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "sistemas-financeiros",
     name: "Sistemas financeiros / ERP",
     category: "financeiro",
-    status: "mock",
+    status: "planejado",
     description: "Conciliação de faturas, pagamentos e contas com um ERP financeiro externo.",
     feeds: ["financeiro"],
     disclaimer:
@@ -118,7 +119,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "open-finance",
     name: "Open Finance",
     category: "open-finance",
-    status: "mock",
+    status: "planejado",
     description:
       "Extrato bancário automático dos clientes, alimentando conciliação e contas a pagar/receber.",
     feeds: ["financeiro"],
@@ -129,7 +130,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "esocial",
     name: "eSocial",
     category: "governo",
-    status: "mock",
+    status: "planejado",
     description: "Transmissão de eventos de admissão, desligamento e folha para o eSocial.",
     feeds: ["obrigacoes"],
     disclaimer:
@@ -139,7 +140,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "sped",
     name: "SPED",
     category: "governo",
-    status: "mock",
+    status: "planejado",
     description: "Transmissão de SPED Fiscal e SPED Contribuições.",
     feeds: ["obrigacoes"],
     disclaimer:

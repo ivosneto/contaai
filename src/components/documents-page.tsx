@@ -21,14 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useOfficeStore, type NewDocumentInput } from "@/data/store";
-import {
-  clientById,
-  clients,
-  employees,
-  type DocumentStatus,
-  type DocumentType,
-  type PendencyCategory,
-} from "@/data/office";
+import { type DocumentStatus, type DocumentType, type PendencyCategory } from "@/data/office";
 import {
   ALL_DOCUMENT_TYPES,
   ALL_PENDENCY_CATEGORIES,
@@ -76,7 +69,8 @@ const emptyForm: DocumentFormState = {
 export function DocumentsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { documents, uploadDocument, processDocument, confirmAction } = useOfficeStore();
+  const { documents, clients, uploadDocument, processDocument, confirmAction, clientById } =
+    useOfficeStore();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"Todos" | DocumentStatus>("Todos");
   const [open, setOpen] = useState(false);
@@ -110,7 +104,7 @@ export function DocumentsPage() {
         d.name.toLowerCase().includes(query);
       return matches && (filter === "Todos" || d.status === filter);
     });
-  }, [documents, q, filter]);
+  }, [documents, q, filter, clientById]);
 
   const awaitingProcessing = documents.filter((d) => d.pipelineStage === "Recebido").length;
   const approved = documents.filter((d) => d.status === "Aprovado").length;
@@ -484,21 +478,12 @@ export function DocumentsPage() {
                 <label className="text-xs font-semibold uppercase text-muted-foreground">
                   Responsável
                 </label>
-                <Select
+                <Input
+                  className="mt-1"
                   value={form.assignee}
-                  onValueChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={e.name}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => setForm((f) => ({ ...f, assignee: e.target.value }))}
+                  placeholder="Nome de quem vai cuidar deste documento"
+                />
               </div>
             </div>
             <div>

@@ -176,6 +176,16 @@ export type Opportunity = {
   expectedAt: string;
   competitor?: string;
   lossReason?: string;
+  // Contexto que originou a recomendação — só presente em oportunidades reais
+  // criadas via Revenue Intelligence → Action Engine (ver opportunities.server.ts);
+  // as 30 oportunidades estáticas de demonstração abaixo não têm esses campos.
+  clientId?: string;
+  origin?: string;
+  reasoning?: string[];
+  currentFee?: number;
+  recommendation?: string;
+  nextAction?: string;
+  updatedAt?: string;
 };
 
 export type Task = {

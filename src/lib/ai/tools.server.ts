@@ -75,6 +75,18 @@ export const COPILOT_TOOLS: LlmToolDef[] = [
       "Oportunidades de reajuste de honorário identificadas pelo Revenue Intelligence — só para staff.",
     parameters: { type: "object", properties: { clientId: { type: "string" } } },
   },
+  {
+    name: "get_commercial_pipeline",
+    description:
+      "Pipeline comercial (CRM): oportunidades reais já criadas, com o motivo/contexto que originou cada uma (quando veio do Revenue Intelligence) e quais estão paradas — só para staff.",
+    parameters: {
+      type: "object",
+      properties: {
+        opportunityId: { type: "string", description: "id de uma oportunidade específica" },
+        onlyStalled: { type: "boolean", description: "true para listar só as paradas" },
+      },
+    },
+  },
 ];
 
 type ToolArgs = Record<string, unknown>;
@@ -92,7 +104,8 @@ function argString(args: ToolArgs, key: string): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-async function buildProfitability(ctx: AuthContext) {
+/** Exportada — também usada por listRevenueOpportunitiesFn (src/data/server-functions/revenue-intelligence.ts) para a UI mostrar exatamente os mesmos dados reais que o Copilot já usa aqui, em vez do office.ts estático. */
+export async function buildProfitability(ctx: AuthContext) {
   const [{ listClients }, { listEmployees }] = await Promise.all([
     import("@/data/repositories/clients.server"),
     import("@/data/repositories/employees.server"),
@@ -283,6 +296,34 @@ export async function callCopilotTool(
           ? opportunities.filter((o) => o.clientId === clientId)
           : opportunities,
       };
+    }
+
+    case "get_commercial_pipeline": {
+      forbidForClient(ctx, name);
+      const opportunityId = argString(args, "opportunityId");
+      const onlyStalled = args["onlyStalled"] === true;
+      const { listOpportunities } = await import("@/data/repositories/opportunities.server");
+      const opportunities = await listOpportunities(ctx.client, ctx.workspaceId);
+      // "Parada": em aberto (nem Fechado nem Perdido) e sem nenhuma
+      // atualização (mudança de estágio, edição) há mais de 14 dias — limiar
+      // documentado, não um dado inventado sobre a oportunidade em si.
+      const STALLED_DAYS = 14;
+      const withStalled = opportunities.map((o) => {
+        const daysSinceUpdate = o.updatedAt
+          ? Math.floor((Date.now() - new Date(o.updatedAt).getTime()) / 86_400_000)
+          : null;
+        const stalled =
+          !["Fechado", "Perdido"].includes(o.stage) &&
+          daysSinceUpdate !== null &&
+          daysSinceUpdate >= STALLED_DAYS;
+        return { ...o, daysSinceUpdate, stalled };
+      });
+      const filtered = opportunityId
+        ? withStalled.filter((o) => o.id === opportunityId)
+        : onlyStalled
+          ? withStalled.filter((o) => o.stalled)
+          : withStalled;
+      return { opportunities: filtered };
     }
 
     default:

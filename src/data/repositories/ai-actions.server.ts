@@ -1,7 +1,11 @@
 import type { DomainClient } from "./domain-client.server";
 import type { AiActionRow, JsonValue } from "./domain-types";
 
-export type AiActionKind = "reassign-tasks" | "create-pendency" | "link-obligation-evidence";
+export type AiActionKind =
+  | "reassign-tasks"
+  | "create-pendency"
+  | "link-obligation-evidence"
+  | "create-opportunity";
 export type AiActionStatus = AiActionRow["status"];
 
 export type AiAction = {

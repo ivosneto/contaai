@@ -27,8 +27,27 @@ export type IntegrationCategory =
   | "open-finance" // Open Finance
   | "governo"; // eSocial, SPED, Receita Federal
 
-/** "real" = tem OAuth/API de verdade implementada (ver src/lib/email/ + src/data/server-functions/email-integration.ts para o único caso hoje, e-mail) — o card correspondente na UI (integrations-page.tsx) mostra o status ao vivo em vez do badge "Mock" genérico. */
-export type IntegrationStatus = "mock" | "nao_configurado" | "real";
+/**
+ * Vocabulário de status do catálogo — nível de CAPACIDADE (o que o código
+ * já faz), não de conexão de uma conta específica (isso é dinâmico, ver o
+ * card de e-mail em integrations-page.tsx, que tem seu próprio estado
+ * "Integrado"/"Em configuração"/"Erro" por workspace):
+ *
+ * - "real": código comprovado contra o sistema externo de verdade (hoje só
+ *   e-mail — OAuth 2.0 + Gmail API, src/lib/email/).
+ * - "em_configuracao": adapter, autenticação, timeout/retry e tratamento de
+ *   erro já implementados e testados — falta só confirmação de
+ *   endpoint/credencial real do lado externo (Alterdata, Sittax — ver
+ *   src/lib/fiscal/). Nunca "mock": nenhuma chamada é simulada, a integração
+ *   genuinely lança "não configurado" até ter acesso real.
+ * - "demo": nada real, mas um mecanismo INTERATIVO existe nesta página para
+ *   ilustrar o fluxo com dado fabricado, sempre rotulado como tal (ex.:
+ *   simular recebimento de WhatsApp/Drive — grava de verdade na Inbox/
+ *   Documentos a partir de um payload de exemplo).
+ * - "planejado": nenhum código, nenhuma pesquisa de endpoint confirmada —
+ *   item de roadmap, não uma integração em progresso.
+ */
+export type IntegrationStatus = "real" | "em_configuracao" | "demo" | "planejado";
 
 /** O que a integração, quando real, alimentaria no ContaAI — documentação, não comportamento. */
 export type IntegrationFeeds =

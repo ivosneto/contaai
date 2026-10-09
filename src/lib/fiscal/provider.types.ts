@@ -20,7 +20,8 @@ export type FiscalObligationStatus = {
   value: number | null;
 };
 
-export type FiscalProviderErrorCode = "NOT_CONFIGURED" | "AUTH_FAILED" | "UNAVAILABLE";
+export type FiscalProviderErrorCode =
+  "NOT_CONFIGURED" | "AUTH_FAILED" | "RATE_LIMITED" | "INVALID_RESPONSE" | "UNAVAILABLE";
 
 export class FiscalProviderError extends Error {
   constructor(
@@ -32,6 +33,19 @@ export class FiscalProviderError extends Error {
   }
 }
 
+/**
+ * `clientCnpj` identifica o cliente pelo vocabulário da origem externa
+ * (Alterdata etc.), não pelo `Client.id` interno do ContaAI — a API externa
+ * não tem noção de workspace do ContaAI. Isso significa que QUALQUER
+ * consumidor de `listObligationStatuses` (hoje nenhum — ver
+ * alterdata-provider.server.ts) é responsável por validar, ANTES de
+ * chamar, que o CNPJ pedido pertence a um cliente do workspace de quem
+ * está pedindo — do contrário nada impede um workspace de consultar o
+ * CNPJ de um cliente de outro. Use `assertCnpjBelongsToWorkspace`
+ * (workspace-guard.ts) para essa checagem; mesmo padrão de revalidação de
+ * posse usado em executeApprovedAiAction (copilot.ts) e
+ * proposeCreateOpportunityFn (opportunities.ts).
+ */
 export type FiscalProvider = {
   readonly name: string;
   listObligationStatuses(clientCnpj: string, competence: string): Promise<FiscalObligationStatus[]>;

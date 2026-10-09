@@ -3,9 +3,21 @@ import { useNavigate } from "@tanstack/react-router";
 import { Bot, Lightbulb, Sparkles } from "lucide-react";
 import { Badge, Glass, Kpi, PageHeader, StatusDot } from "@/components/accounting-os";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useOfficeStore } from "@/data/store";
-import { agents, clientById, insights, type Department, type Insight, type InsightSeverity } from "@/data/office";
+import {
+  agents,
+  insights,
+  type Department,
+  type Insight,
+  type InsightSeverity,
+} from "@/data/office";
 
 type InsightKind = Insight["kind"];
 type DisplayStatus = "Aberto" | "Resolvido" | "Ignorado";
@@ -21,7 +33,9 @@ function urgency(i: Insight) {
   return severityWeight[i.severity] * 10 + kindWeight[i.kind];
 }
 
-function severityTone(s: InsightSeverity): "good" | "warn" | "bad" | "brand" | "accent" | "neutral" {
+function severityTone(
+  s: InsightSeverity,
+): "good" | "warn" | "bad" | "brand" | "accent" | "neutral" {
   if (s === "Crítica") return "bad";
   if (s === "Alta") return "warn";
   if (s === "Média") return "brand";
@@ -47,7 +61,16 @@ function uniq<T>(arr: T[]): T[] {
 
 export function IntelligencePage() {
   const navigate = useNavigate();
-  const { insightStatus, resolveInsight, ignoreInsight, confirmAction, liveInsights, redistributeFromInsight, dismissLiveInsight } = useOfficeStore();
+  const {
+    insightStatus,
+    resolveInsight,
+    ignoreInsight,
+    confirmAction,
+    liveInsights,
+    redistributeFromInsight,
+    dismissLiveInsight,
+    clientById,
+  } = useOfficeStore();
   const [view, setView] = useState<"atencao" | "todos">("atencao");
   const [kind, setKind] = useState<"Todos" | InsightKind>("Todos");
   const [severity, setSeverity] = useState<"Todas" | InsightSeverity>("Todas");
@@ -61,15 +84,28 @@ export function IntelligencePage() {
   // ao processar um documento) — mesma lista, mesmos filtros, uma só Central.
   const allInsights = useMemo(() => [...liveInsights, ...insights], [liveInsights]);
 
-  const clientOptions = useMemo(() => uniq(allInsights.map((i) => i.clientId).filter((id): id is string => Boolean(id))).map((id) => ({ id, name: clientById(id)?.name ?? id })), [allInsights]);
-  const departmentOptions = useMemo(() => uniq(allInsights.map((i) => i.department).filter((d): d is Department => Boolean(d))), [allInsights]);
-  const assigneeOptions = useMemo(() => uniq(allInsights.map((i) => i.assignee).filter((a): a is string => Boolean(a))), [allInsights]);
+  const clientOptions = useMemo(
+    () =>
+      uniq(allInsights.map((i) => i.clientId).filter((id): id is string => Boolean(id))).map(
+        (id) => ({ id, name: clientById(id)?.name ?? id }),
+      ),
+    [allInsights, clientById],
+  );
+  const departmentOptions = useMemo(
+    () => uniq(allInsights.map((i) => i.department).filter((d): d is Department => Boolean(d))),
+    [allInsights],
+  );
+  const assigneeOptions = useMemo(
+    () => uniq(allInsights.map((i) => i.assignee).filter((a): a is string => Boolean(a))),
+    [allInsights],
+  );
 
   const withStatus = useMemo(
     () =>
       allInsights.map((i) => {
         const overlay = insightStatus[i.id];
-        const displayStatus: DisplayStatus = overlay === "resolvido" ? "Resolvido" : overlay === "ignorado" ? "Ignorado" : i.status;
+        const displayStatus: DisplayStatus =
+          overlay === "resolvido" ? "Resolvido" : overlay === "ignorado" ? "Ignorado" : i.status;
         return { ...i, displayStatus, isLive: i.id.startsWith("live-capacity-") };
       }),
     [allInsights, insightStatus],
@@ -90,12 +126,15 @@ export function IntelligencePage() {
   );
 
   const list = useMemo(() => {
-    const base = view === "atencao" ? filtered.filter((i) => i.displayStatus === "Aberto") : filtered;
+    const base =
+      view === "atencao" ? filtered.filter((i) => i.displayStatus === "Aberto") : filtered;
     return [...base].sort((a, b) => urgency(b) - urgency(a));
   }, [filtered, view]);
 
   const openCount = withStatus.filter((i) => i.displayStatus === "Aberto").length;
-  const criticalCount = withStatus.filter((i) => i.displayStatus === "Aberto" && i.severity === "Crítica").length;
+  const criticalCount = withStatus.filter(
+    (i) => i.displayStatus === "Aberto" && i.severity === "Crítica",
+  ).length;
 
   return (
     <>
@@ -103,60 +142,138 @@ export function IntelligencePage() {
         eyebrow="DADOS → INTELIGÊNCIA → AÇÃO"
         title="Central de Inteligência"
         description="O cérebro operacional do ContaAI: problemas, oportunidades e previsões derivados dos dados reais — nunca texto solto."
-        action={<Badge tone="accent"><Sparkles className="mr-1 size-3" /> {agents.length} agentes monitorando</Badge>}
+        action={
+          <Badge tone="accent">
+            <Sparkles className="mr-1 size-3" /> {agents.length} agentes monitorando
+          </Badge>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Kpi label="Insights ativos" value={String(openCount)} change={`${allInsights.length} no total`} tone="brand" />
-        <Kpi label="Críticos" value={String(criticalCount)} change="exigem atenção imediata" tone={criticalCount > 0 ? "bad" : "good"} />
-        <Kpi label="Problemas" value={String(withStatus.filter((i) => i.kind === "Problema" && i.displayStatus === "Aberto").length)} change="em aberto" tone="bad" />
-        <Kpi label="Oportunidades" value={String(withStatus.filter((i) => i.kind === "Oportunidade" && i.displayStatus === "Aberto").length)} change="em aberto" tone="good" />
+        <Kpi
+          label="Insights ativos"
+          value={String(openCount)}
+          change={`${allInsights.length} no total`}
+          tone="brand"
+        />
+        <Kpi
+          label="Críticos"
+          value={String(criticalCount)}
+          change="exigem atenção imediata"
+          tone={criticalCount > 0 ? "bad" : "good"}
+        />
+        <Kpi
+          label="Problemas"
+          value={String(
+            withStatus.filter((i) => i.kind === "Problema" && i.displayStatus === "Aberto").length,
+          )}
+          change="em aberto"
+          tone="bad"
+        />
+        <Kpi
+          label="Oportunidades"
+          value={String(
+            withStatus.filter((i) => i.kind === "Oportunidade" && i.displayStatus === "Aberto")
+              .length,
+          )}
+          change="em aberto"
+          tone="good"
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant={view === "atencao" ? "default" : "outline"} onClick={() => setView("atencao")}><Sparkles className="size-4" /> O que precisa da minha atenção?</Button>
-        <Button variant={view === "todos" ? "default" : "outline"} onClick={() => setView("todos")}>Todos os insights</Button>
+        <Button
+          variant={view === "atencao" ? "default" : "outline"}
+          onClick={() => setView("atencao")}
+        >
+          <Sparkles className="size-4" /> O que precisa da minha atenção?
+        </Button>
+        <Button variant={view === "todos" ? "default" : "outline"} onClick={() => setView("todos")}>
+          Todos os insights
+        </Button>
       </div>
 
       <Glass className="mt-4 p-4">
         <div className="flex flex-wrap gap-2">
           {(["Todos", ...KINDS] as const).map((k) => (
-            <Button key={k} size="sm" variant={kind === k ? "default" : "outline"} onClick={() => setKind(k)}>
-              {k === "Todos" ? "Todos os tipos" : `${k}s`} <Badge tone={kind === k ? "brand" : "neutral"}>{k === "Todos" ? allInsights.length : allInsights.filter((i) => i.kind === k).length}</Badge>
+            <Button
+              key={k}
+              size="sm"
+              variant={kind === k ? "default" : "outline"}
+              onClick={() => setKind(k)}
+            >
+              {k === "Todos" ? "Todos os tipos" : `${k}s`}{" "}
+              <Badge tone={kind === k ? "brand" : "neutral"}>
+                {k === "Todos"
+                  ? allInsights.length
+                  : allInsights.filter((i) => i.kind === k).length}
+              </Badge>
             </Button>
           ))}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <Select value={severity} onValueChange={(v) => setSeverity(v as "Todas" | InsightSeverity)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+          <Select
+            value={severity}
+            onValueChange={(v) => setSeverity(v as "Todas" | InsightSeverity)}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todas">Toda prioridade</SelectItem>
-              {SEVERITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {SEVERITIES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={clientId} onValueChange={setClientId}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Cliente" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todo cliente</SelectItem>
-              {clientOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {clientOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Select value={department} onValueChange={(v) => setDepartment(v as "Todos" | Department)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Departamento" /></SelectTrigger>
+          <Select
+            value={department}
+            onValueChange={(v) => setDepartment(v as "Todos" | Department)}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Departamento" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todo departamento</SelectItem>
-              {departmentOptions.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              {departmentOptions.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={assignee} onValueChange={setAssignee}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todo responsável</SelectItem>
-              {assigneeOptions.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              {assigneeOptions.map((a) => (
+                <SelectItem key={a} value={a}>
+                  {a}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todo período</SelectItem>
               <SelectItem value="7d">Últimos 7 dias</SelectItem>
@@ -167,7 +284,11 @@ export function IntelligencePage() {
       </Glass>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {list.length === 0 && <p className="text-sm text-muted-foreground">Nenhum insight encontrado com esses filtros.</p>}
+        {list.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Nenhum insight encontrado com esses filtros.
+          </p>
+        )}
         {list.map((i) => {
           const client = i.clientId ? clientById(i.clientId) : undefined;
           return (
@@ -187,10 +308,15 @@ export function IntelligencePage() {
 
               <dl className="mt-4 space-y-3 text-sm">
                 <div>
-                  <dt className="text-xs font-semibold uppercase text-muted-foreground">Evidências</dt>
+                  <dt className="text-xs font-semibold uppercase text-muted-foreground">
+                    Evidências
+                  </dt>
                   <dd className="mt-1 space-y-1">
                     {i.evidence.map((e, idx) => (
-                      <div key={idx} className="flex items-start gap-2"><StatusDot tone="brand" /><span>{e}</span></div>
+                      <div key={idx} className="flex items-start gap-2">
+                        <StatusDot tone="brand" />
+                        <span>{e}</span>
+                      </div>
                     ))}
                   </dd>
                 </div>
@@ -211,7 +337,9 @@ export function IntelligencePage() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {i.displayStatus !== "Aberto" ? (
-                  <Badge tone={i.displayStatus === "Resolvido" ? "good" : "neutral"}>{i.displayStatus}</Badge>
+                  <Badge tone={i.displayStatus === "Resolvido" ? "good" : "neutral"}>
+                    {i.displayStatus}
+                  </Badge>
                 ) : (
                   <>
                     {i.actions.map((a, j) => (
@@ -225,8 +353,11 @@ export function IntelligencePage() {
                                 title: a,
                                 description: i.title,
                                 impact: "operacional",
-                                successMessage: i.isLive ? "Redistribuição aplicada — resultado registrado na timeline do cliente." : `${a}: ação executada.`,
-                                onConfirm: () => (i.isLive ? redistributeFromInsight(i.id) : resolveInsight(i.id)),
+                                successMessage: i.isLive
+                                  ? "Redistribuição aplicada — resultado registrado na timeline do cliente."
+                                  : `${a}: ação executada.`,
+                                onConfirm: () =>
+                                  i.isLive ? redistributeFromInsight(i.id) : resolveInsight(i.id),
                               })
                             : void navigate({ to: i.link as "/pessoas" })
                         }
@@ -234,7 +365,13 @@ export function IntelligencePage() {
                         {a}
                       </Button>
                     ))}
-                    <Button size="sm" variant="ghost" onClick={() => (i.isLive ? dismissLiveInsight(i.id) : ignoreInsight(i.id))}>Ignorar</Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => (i.isLive ? dismissLiveInsight(i.id) : ignoreInsight(i.id))}
+                    >
+                      Ignorar
+                    </Button>
                   </>
                 )}
               </div>
@@ -248,12 +385,19 @@ export function IntelligencePage() {
         {agents.map((a) => (
           <Glass key={a.id} className="p-4">
             <div className="flex items-start gap-3">
-              <div className="grid size-9 place-items-center rounded-xl bg-accent/10 text-accent"><Bot className="size-4" /></div>
-              <div className="min-w-0 flex-1"><p className="font-semibold">{a.name}</p><p className="text-xs text-muted-foreground">{a.scope}</p></div>
+              <div className="grid size-9 place-items-center rounded-xl bg-accent/10 text-accent">
+                <Bot className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{a.name}</p>
+                <p className="text-xs text-muted-foreground">{a.scope}</p>
+              </div>
             </div>
             <div className="mt-4 flex items-center justify-between">
               <Badge tone={a.status === "Ativo" ? "good" : "warn"}>{a.status}</Badge>
-              <span className="text-[11px] text-muted-foreground">{a.findings} achados · {a.lastRun}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {a.findings} achados · {a.lastRun}
+              </span>
             </div>
           </Glass>
         ))}

@@ -14,8 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useOfficeStore } from "@/data/store";
 import {
-  clientById,
-  employees,
   office,
   type Communication,
   type CommunicationChannel,
@@ -81,11 +79,19 @@ export function InboxPage() {
     updateMessageStatus,
     sendReply,
     confirmAction,
+    clientById,
   } = useOfficeStore();
   const [q, setQ] = useState("");
   const [channel, setChannel] = useState<"Todos" | CommunicationChannel>("Todos");
   const [category, setCategory] = useState<"Todas" | CommunicationClassification>("Todas");
   const [status, setStatus] = useState<"Todos" | CommunicationStatus>("Todos");
+
+  // Nomes de responsável já usados em comunicações reais deste workspace —
+  // nunca o roster fictício de 20 funcionários do protótipo.
+  const assigneeOptions = useMemo(
+    () => [...new Set(communications.map((m) => m.assignee).filter(Boolean))].sort(),
+    [communications],
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyOpenId, setReplyOpenId] = useState<string | null>(null);
@@ -108,7 +114,7 @@ export function InboxPage() {
           (status === "Todos" || m.status === status)
         );
       });
-  }, [communications, q, channel, category, status]);
+  }, [communications, q, channel, category, status, clientById]);
 
   const requiresActionCount = communications.filter((m) => m.requiresAction).length;
   const urgentCount = communications.filter(
@@ -380,9 +386,9 @@ export function InboxPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {employees.map((e) => (
-                            <SelectItem key={e.id} value={e.name}>
-                              {e.name}
+                          {assigneeOptions.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
                             </SelectItem>
                           ))}
                         </SelectContent>

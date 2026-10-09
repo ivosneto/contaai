@@ -1532,6 +1532,16 @@ type OfficeStoreValue = StoreState & {
   ) => void;
   deleteKnowledgeArticle: (id: string) => void;
   confirmAction: (options: ConfirmOptions) => void;
+  /**
+   * Busca um cliente REAL (state.clients, vindo do bootstrap do Supabase) —
+   * nunca usar o `clientById` estático de @/data/office para resolver o id
+   * de uma entidade real (documento, obrigação, pendência, comunicação,
+   * oportunidade). O id estático ("c1".."c20") nunca colide com um UUID
+   * real, então o lookup estático sempre devolve `undefined` em silêncio
+   * para dado de verdade — bug sistêmico identificado numa auditoria de
+   * preparação para piloto; esta função é o substituto correto.
+   */
+  clientById: (id: string | null | undefined) => Client | undefined;
 };
 
 const OfficeStoreContext = createContext<OfficeStoreValue | null>(null);
@@ -1769,6 +1779,7 @@ function OfficeStoreProviderInner({
           ),
         );
       },
+      clientById: (id) => state.clients.find((c) => c.id === id),
       confirmAction,
     }),
     [state, confirmAction],

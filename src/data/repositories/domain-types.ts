@@ -333,6 +333,33 @@ export type EmailAccountRow = {
   updated_at: string;
 };
 
+/** Ver supabase/migrations/20260921100000_opportunities.sql — destino real do loop Revenue Intelligence → Oportunidade → CRM. */
+export type OpportunityRow = {
+  id: string;
+  workspace_id: string;
+  client_id: string;
+  company: string;
+  contact: string;
+  seller: string;
+  source: string;
+  services: string[];
+  mrr: number;
+  setup: number;
+  probability: number;
+  stage: string;
+  expected_at: string | null;
+  competitor: string | null;
+  loss_reason: string | null;
+  origin: string;
+  reasoning: string[];
+  current_fee: number | null;
+  recommendation: string | null;
+  next_action: string | null;
+  ai_action_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type TableDef<Row> = { Row: Row; Insert: Partial<Row>; Update: Partial<Row>; Relationships: [] };
 
 export type DomainDatabase = {
@@ -363,6 +390,7 @@ export type DomainDatabase = {
       ai_interactions: TableDef<AiInteractionRow>;
       contacts: TableDef<ContactRow>;
       email_accounts: TableDef<EmailAccountRow>;
+      opportunities: TableDef<OpportunityRow>;
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

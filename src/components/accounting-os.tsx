@@ -39,6 +39,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
@@ -147,9 +148,28 @@ import { SimulatorPage } from "@/components/simulator-page";
 import { ClientPortalShell } from "@/components/client-portal";
 import { IntegrationsPage } from "@/components/integrations-page";
 import { EmailOAuthCallbackPage } from "@/components/email-oauth-callback";
-import { marginNMonthsAgo, suggestedFee } from "@/lib/profitability-engine";
+import {
+  buildProfitabilityDashboard,
+  marginNMonthsAgo,
+  suggestedFee,
+} from "@/lib/profitability-engine";
 import { OCR_DEMO_DISCLAIMER } from "@/lib/documents-engine";
 import { OBLIGATIONS_DEMO_DISCLAIMER } from "@/lib/obligations-engine";
+import type { RevenueOpportunity } from "@/lib/revenue-intelligence-engine";
+import {
+  listClientProfitabilityFn,
+  listRevenueOpportunitiesFn,
+} from "@/data/server-functions/revenue-intelligence";
+import {
+  listOpportunitiesFn,
+  proposeCreateOpportunityFn,
+  updateOpportunityStageFn,
+} from "@/data/server-functions/opportunities";
+import {
+  approveAiAction,
+  listPendingAiActionsFn,
+  rejectAiAction,
+} from "@/data/server-functions/copilot";
 
 const navGroups = [
   {
@@ -1561,6 +1581,10 @@ function Customer360({ clientId }: { clientId: string }) {
     processDocument,
     createPendencyFromObligation,
   } = useOfficeStore();
+  const realOpportunitiesQuery = useQuery({
+    queryKey: ["opportunities"],
+    queryFn: () => listOpportunitiesFn(),
+  });
   const [tab, setTab] = useState("resumo");
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<ClientEditableFields>(EMPTY_CLIENT_EDIT);
@@ -1596,7 +1620,10 @@ function Customer360({ clientId }: { clientId: string }) {
   const cDocuments = documents.filter((d) => d.clientId === c.id);
   const cObligations = obligations.filter((o) => o.clientId === c.id);
   const cPendencies = pendencies.filter((p) => p.clientId === c.id);
-  const cOpportunities = opportunities.filter((o) => o.company === c.name);
+  // Oportunidades REAIS do cliente (Revenue Intelligence → CRM) — nunca o
+  // array estático casado por nome de empresa, que nunca bate com um
+  // cliente real.
+  const cOpportunities = (realOpportunitiesQuery.data ?? []).filter((o) => o.clientId === c.id);
   const cContact = contacts.find((ct) => ct.clientId === c.id && ct.primary);
   const cContract = contracts.find((ctr) => ctr.clientId === c.id);
   const cProfitability = clientProfitability.find((cp) => cp.clientId === c.id);
@@ -2721,6 +2748,11 @@ function TimelineList({ events }: { events: typeof timeline }) {
 }
 
 function CommercialPage() {
+  const queryClient = useQueryClient();
+  const realOpportunitiesQuery = useQuery({
+    queryKey: ["opportunities"],
+    queryFn: () => listOpportunitiesFn(),
+  });
   const stages = [
     "Lead",
     "Diagnóstico",
@@ -2730,24 +2762,43 @@ function CommercialPage() {
     "Perdido",
     "Onboarding",
   ] as const;
-  const active = opportunities.filter(
+  // Oportunidades reais (nascidas via Revenue Intelligence → Action Engine,
+  // persistidas no Supabase) entram no MESMO pipeline das 30 de demonstração
+  // de src/data/office.ts — nunca um pipeline paralelo. As reais vêm
+  // primeiro em cada coluna.
+  const allOpportunities = [...(realOpportunitiesQuery.data ?? []), ...opportunities];
+  const active = allOpportunities.filter(
     (o) => !["Fechado", "Perdido", "Onboarding"].includes(o.stage),
   );
   const pipe = active.reduce((s, o) => s + o.mrr, 0);
-  const won = opportunities.filter((o) => o.stage === "Fechado").length;
-  const lost = opportunities.filter((o) => o.stage === "Perdido").length;
+  const won = allOpportunities.filter((o) => o.stage === "Fechado").length;
+  const lost = allOpportunities.filter((o) => o.stage === "Perdido").length;
   const conversionPct = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
   const avgTicket = active.length > 0 ? Math.round(pipe / active.length) : 0;
+
+  const markResult = (opportunityId: string, stage: "Fechado" | "Perdido") => {
+    const lossReason = stage === "Perdido" ? window.prompt("Motivo da perda (opcional):") : null;
+    updateOpportunityStageFn({
+      data: { id: opportunityId, stage, ...(lossReason ? { lossReason } : {}) },
+    })
+      .then(() => {
+        toast.success(
+          stage === "Fechado"
+            ? "Oportunidade marcada como ganha."
+            : "Oportunidade marcada como perdida.",
+        );
+        void queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Falha ao atualizar oportunidade.");
+      });
+  };
+
   return (
     <>
       <PageHeader
         title="CRM Contábil"
         description="Do primeiro contato ao onboarding, com pipeline ponderado e próximas ações."
-        action={
-          <Button onClick={() => comingSoon("oportunidades")}>
-            <Plus /> Nova oportunidade
-          </Button>
-        }
       />
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi
@@ -2759,7 +2810,7 @@ function CommercialPage() {
         <Kpi
           label="Pipeline ponderado"
           value={brl(
-            Math.round(opportunities.reduce((s, o) => s + (o.mrr * o.probability) / 100, 0)),
+            Math.round(allOpportunities.reduce((s, o) => s + (o.mrr * o.probability) / 100, 0)),
           )}
           change="probabilidade aplicada"
         />
@@ -2780,22 +2831,45 @@ function CommercialPage() {
           <div key={stage} className="glass-panel w-64 shrink-0 rounded-2xl p-3">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">{stage}</h3>
-              <Badge>{opportunities.filter((o) => o.stage === stage).length}</Badge>
+              <Badge>{allOpportunities.filter((o) => o.stage === stage).length}</Badge>
             </div>
             <div className="space-y-2">
-              {opportunities
+              {allOpportunities
                 .filter((o) => o.stage === stage)
                 .slice(0, 5)
                 .map((o) => (
                   <div key={o.id} className="glass-soft rounded-xl p-3">
-                    <p className="text-sm font-semibold">{o.company}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold">{o.company}</p>
+                      {o.origin === "Revenue Intelligence" && <Badge tone="accent">IA</Badge>}
+                    </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {o.services.slice(0, 2).join(" + ")}
+                      {o.services.slice(0, 2).join(" + ") || o.recommendation || o.source}
                     </p>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-xs font-semibold text-brand">{brl(o.mrr)}/mês</span>
                       <span className="text-[10px] text-muted-foreground">{o.probability}%</span>
                     </div>
+                    {o.clientId && !["Fechado", "Perdido"].includes(o.stage) && (
+                      <div className="mt-2 flex gap-1.5 border-t border-glass-line pt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 flex-1 px-2 text-[11px]"
+                          onClick={() => markResult(o.id, "Fechado")}
+                        >
+                          Ganha
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 flex-1 px-2 text-[11px]"
+                          onClick={() => markResult(o.id, "Perdido")}
+                        >
+                          Perdida
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
@@ -2809,28 +2883,72 @@ function CommercialPage() {
 
 function RevenueIntelligenceSection() {
   const navigate = useNavigate();
-  const { confirmAction, createCommercialRecommendation } = useOfficeStore();
+  const queryClient = useQueryClient();
+  const { clientById } = useOfficeStore();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const totalPotential = revenueOpportunities.reduce((s, o) => s + o.potentialIncrease, 0);
+  const [proposingClientId, setProposingClientId] = useState<string | null>(null);
 
-  const simulate = (o: (typeof revenueOpportunities)[number], name: string) =>
+  const opportunitiesQuery = useQuery({
+    queryKey: ["revenue-opportunities"],
+    queryFn: () => listRevenueOpportunitiesFn(),
+  });
+  const pendingActionsQuery = useQuery({
+    queryKey: ["pending-ai-actions"],
+    queryFn: () => listPendingAiActionsFn(),
+  });
+  const pendingOpportunityActions = (pendingActionsQuery.data ?? []).filter(
+    (a) => a.kind === "create-opportunity",
+  );
+  const proposedClientIds = new Set(
+    pendingOpportunityActions
+      .map((a) => a.payload["clientId"])
+      .filter((v): v is string => typeof v === "string"),
+  );
+
+  const liveOpportunities = opportunitiesQuery.data ?? [];
+  const totalPotential = liveOpportunities.reduce((s, o) => s + o.potentialIncrease, 0);
+
+  const simulate = (o: RevenueOpportunity, name: string) =>
     toast(
       `${name}: faixa recomendada ${brl(o.recommendedRange.min)} – ${brl(o.recommendedRange.max)}/mês (hoje ${brl(o.currentFee)}). Margem ${o.marginBefore}% → ${o.marginAfter}%.`,
     );
-  const approve = (o: (typeof revenueOpportunities)[number], name: string) =>
-    confirmAction({
-      title: "Enviar para aprovação do gestor",
-      description: `Reajuste de ${name} para a faixa ${brl(o.recommendedRange.min)}–${brl(o.recommendedRange.max)}/mês exige aprovação — nada é executado automaticamente.`,
-      impact: "operacional",
-      confirmLabel: "Enviar para aprovação",
-      successMessage: "Recomendação enviada à Central de Pendências para aprovação do gestor.",
-      onConfirm: () =>
-        createCommercialRecommendation(
-          o.clientId,
-          `Aprovar reajuste — ${name}`,
-          `${o.situation} Faixa recomendada: ${brl(o.recommendedRange.min)}–${brl(o.recommendedRange.max)}/mês.`,
-        ),
-    });
+
+  const createOpportunity = (o: RevenueOpportunity, name: string) => {
+    setProposingClientId(o.clientId);
+    const targetFee = Math.round((o.recommendedRange.min + o.recommendedRange.max) / 2);
+    proposeCreateOpportunityFn({
+      data: {
+        clientId: o.clientId,
+        situation: o.situation,
+        evidence: o.evidence,
+        currentFee: o.currentFee,
+        targetFee,
+        recommendedMin: o.recommendedRange.min,
+        recommendedMax: o.recommendedRange.max,
+        estimatedImpact: o.estimatedImpact,
+      },
+    })
+      .then(() => {
+        toast.success(`Oportunidade proposta para ${name} — aguardando aprovação de um gestor.`);
+        void queryClient.invalidateQueries({ queryKey: ["pending-ai-actions"] });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Falha ao propor oportunidade.");
+      })
+      .finally(() => setProposingClientId(null));
+  };
+
+  const decideOpportunity = (actionId: string, approve: boolean) => {
+    (approve ? approveAiAction({ data: { actionId } }) : rejectAiAction({ data: { actionId } }))
+      .then(() => {
+        toast.success(approve ? "Oportunidade criada no CRM." : "Proposta rejeitada.");
+        void queryClient.invalidateQueries({ queryKey: ["pending-ai-actions"] });
+        void queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Falha ao decidir a proposta.");
+      });
+  };
 
   return (
     <Glass className="mt-4 p-5">
@@ -2838,22 +2956,64 @@ function RevenueIntelligenceSection() {
         <div>
           <h2 className="font-display text-lg font-semibold">Revenue Intelligence</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Oportunidades de receita que normalmente passam despercebidas — nunca executadas
-            automaticamente, sempre aprovadas pelo gestor.
+            Oportunidades de receita que normalmente passam despercebidas — detecta, explica e
+            recomenda; nunca cria ou altera o CRM sozinha, sempre aprovadas por um gestor.
           </p>
         </div>
         <Badge tone="accent">{brl(totalPotential)}/mês de potencial identificado</Badge>
       </div>
+
+      {pendingOpportunityActions.length > 0 && (
+        <div className="mt-4 space-y-1.5 rounded-lg border border-brand/20 bg-brand/5 p-3">
+          <p className="flex items-center gap-1 text-[10px] font-semibold uppercase text-brand">
+            <Sparkles className="size-3" /> Propostas de oportunidade aguardando aprovação
+          </p>
+          {pendingOpportunityActions.map((a) => {
+            const clientId = String(a.payload["clientId"] ?? "");
+            const client = clientById(clientId);
+            return (
+              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span>{client?.name ?? clientId}</span>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => decideOpportunity(a.id, true)}
+                  >
+                    Aprovar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => decideOpportunity(a.id, false)}
+                  >
+                    Rejeitar
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="mt-4 space-y-2">
-        {revenueOpportunities.length === 0 && (
+        {opportunitiesQuery.isPending && (
+          <p className="text-sm text-muted-foreground">Calculando oportunidades de receita…</p>
+        )}
+        {opportunitiesQuery.isError && (
+          <p className="text-sm text-bad">Falha ao carregar o Revenue Intelligence.</p>
+        )}
+        {opportunitiesQuery.isSuccess && liveOpportunities.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Nenhuma oportunidade de receita identificada no momento.
           </p>
         )}
-        {revenueOpportunities.map((o) => {
+        {liveOpportunities.map((o) => {
           const client = clientById(o.clientId);
           const name = client?.name ?? o.clientId;
           const open = expanded === o.clientId;
+          const alreadyProposed = proposedClientIds.has(o.clientId);
           return (
             <div key={o.clientId} className="glass-soft rounded-xl p-4">
               <button
@@ -2911,8 +3071,13 @@ function RevenueIntelligenceSection() {
                     <Button size="sm" onClick={() => simulate(o, name)}>
                       Simular reajuste
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => approve(o, name)}>
-                      Enviar para aprovação
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={alreadyProposed || proposingClientId === o.clientId}
+                      onClick={() => createOpportunity(o, name)}
+                    >
+                      {alreadyProposed ? "Aguardando aprovação" : "Criar oportunidade"}
                     </Button>
                     <Button
                       size="sm"
@@ -3430,10 +3595,27 @@ function TasksPage() {
 
 function ProfitabilityPage() {
   const navigate = useNavigate();
-  const { confirmAction, createTaskForClient, createCommercialRecommendation } = useOfficeStore();
+  const { clients, confirmAction, createTaskForClient, createCommercialRecommendation } =
+    useOfficeStore();
   const [rankTab, setRankTab] = useState<"top" | "bottom" | "deficit">("top");
+
+  const profitabilityQuery = useQuery({
+    queryKey: ["client-profitability"],
+    queryFn: () => listClientProfitabilityFn(),
+  });
+  const profitabilityData = profitabilityQuery.data;
+  const clientProfitability = useMemo(
+    () => profitabilityData?.clientProfitability ?? [],
+    [profitabilityData],
+  );
+  const employees = profitabilityData?.employees ?? [];
+  const profitabilityDashboard = useMemo(
+    () => buildProfitabilityDashboard(clientProfitability),
+    [clientProfitability],
+  );
+
   const rows = clientProfitability
-    .map((cp) => ({ cp, client: clientById(cp.clientId) }))
+    .map((cp) => ({ cp, client: clients.find((c) => c.id === cp.clientId) }))
     .filter((r): r is { cp: (typeof clientProfitability)[number]; client: Client } =>
       Boolean(r.client),
     );
@@ -3487,6 +3669,18 @@ function ProfitabilityPage() {
           </Button>
         }
       />
+      {profitabilityQuery.isPending && (
+        <p className="text-sm text-muted-foreground">Calculando rentabilidade por cliente…</p>
+      )}
+      {profitabilityQuery.isError && (
+        <p className="text-sm text-bad">Falha ao carregar a rentabilidade por cliente.</p>
+      )}
+      {profitabilityQuery.isSuccess && clientProfitability.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Nenhum cliente com dado de rentabilidade ainda — cadastre clientes e horas apontadas para
+          a carteira aparecer aqui.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi
           label="Receita da carteira"
