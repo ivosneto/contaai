@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  ArrowRight,
   BarChart3,
+  Check,
   CheckCircle2,
   Inbox,
+  Landmark,
+  Mail,
   MessageSquareText,
   ShieldCheck,
   Sparkles,
@@ -14,6 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitLeadFn } from "@/data/server-functions/marketing";
+
+const NAV_LINKS = [
+  { href: "#recursos", label: "Recursos" },
+  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#integracoes", label: "Integrações" },
+  { href: "#precos", label: "Preços" },
+  { href: "#faq", label: "FAQ" },
+] as const;
 
 const FEATURES = [
   {
@@ -51,6 +63,84 @@ const FEATURES = [
     title: "Nenhuma ação sem aprovação",
     description:
       "A IA propõe, explica o porquê e espera um humano decidir. Nada muda no seu CRM, tarefas ou cadastro sozinho.",
+  },
+] as const;
+
+const HOW_IT_WORKS = [
+  {
+    step: "1",
+    title: "Seus dados entram",
+    description: "Clientes, tarefas, documentos e e-mail — o que já existe no seu escritório.",
+  },
+  {
+    step: "2",
+    title: "A IA cruza e detecta",
+    description:
+      "Revenue Intelligence e Rentabilidade Real encontram o que passaria despercebido numa planilha.",
+  },
+  {
+    step: "3",
+    title: "Você aprova",
+    description: "Toda recomendação chega explicada — o gestor decide, nunca a IA sozinha.",
+  },
+  {
+    step: "4",
+    title: "O resultado fica registrado",
+    description:
+      "Vira oportunidade no CRM, tarefa ou ação — com histórico, não só uma sugestão perdida.",
+  },
+] as const;
+
+/**
+ * Status honesto por integração — mesmo vocabulário usado dentro do
+ * produto (Configurações): nunca "disponível" quando ainda não está
+ * conectado de verdade. Ver src/integrations/providers/catalog.ts.
+ */
+const INTEGRATIONS = [
+  { icon: Mail, name: "Gmail", status: "Real" as const },
+  { icon: Landmark, name: "Alterdata", status: "Em configuração" as const },
+  { icon: Landmark, name: "Sittax", status: "Em configuração" as const },
+];
+
+const INTEGRATION_BADGE: Record<(typeof INTEGRATIONS)[number]["status"], string> = {
+  Real: "bg-good/10 text-good",
+  "Em configuração": "bg-warn/10 text-warn",
+};
+
+/**
+ * Valores FICTÍCIOS — pedido explícito do dono do produto pra fechar o
+ * design antes de ter preço final definido. Substituir antes de divulgar
+ * a sério (anúncio pago, imprensa, etc.).
+ */
+const PLANS = [
+  {
+    name: "Essencial",
+    price: "R$ 297",
+    period: "/mês",
+    description: "Pra escritórios que querem organizar a operação num só lugar.",
+    features: [
+      "Até 20 clientes ativos",
+      "Equipe ilimitada",
+      "Clientes, tarefas e obrigações",
+      "Documentos com OCR",
+      "CRM básico",
+    ],
+    highlighted: false,
+  },
+  {
+    name: "Inteligência",
+    price: "R$ 697",
+    period: "/mês",
+    description: "Tudo do Essencial, mais a camada de inteligência comercial.",
+    features: [
+      "Clientes ilimitados",
+      "Revenue Intelligence",
+      "Rentabilidade real por cliente",
+      "Copilot com dados reais",
+      "CRM conectado à inteligência",
+      "E-mail integrado (Gmail)",
+    ],
+    highlighted: true,
   },
 ] as const;
 
@@ -178,40 +268,94 @@ function ContactForm() {
   );
 }
 
+function SectionEyebrow({ children }: { children: string }) {
+  return (
+    <p className="text-center text-xs font-semibold uppercase tracking-wide text-brand">
+      {children}
+    </p>
+  );
+}
+
 export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <ContaAILogo variant="horizontal" size={32} />
-        <Button variant="outline" onClick={onGetStarted}>
-          Entrar
-        </Button>
+    <div className="min-h-screen overflow-x-hidden bg-background">
+      <header className="sticky top-0 z-20 border-b border-glass-line/60 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <ContaAILogo variant="horizontal" size={30} />
+          <nav className="hidden items-center gap-7 md:flex">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+          <Button variant="outline" onClick={onGetStarted}>
+            Entrar
+          </Button>
+        </div>
       </header>
 
-      <section className="mx-auto max-w-4xl px-6 pb-16 pt-10 text-center sm:pb-24 sm:pt-16">
-        <p className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand">
-          <Sparkles className="size-3.5" /> Inteligência operacional para escritórios contábeis
-        </p>
-        <h1 className="mt-5 font-display text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-          Sua contabilidade já sabe os números. A ContaAI mostra o que fazer com eles.
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
-          Rentabilidade real por cliente, oportunidades de receita que passam despercebidas, e um
-          Copilot que responde com os dados do seu próprio escritório — nunca inventa, sempre
-          explica, nunca age sem sua aprovação.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Button size="lg" onClick={onGetStarted}>
-            Criar meu workspace
-          </Button>
-          <Button size="lg" variant="outline" asChild>
-            <a href="#contato">Falar com a gente</a>
-          </Button>
+      {/* Hero */}
+      <section className="relative px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/15 via-accent/10 to-transparent blur-3xl"
+        />
+        <div className="relative mx-auto max-w-3xl text-center">
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand">
+            <Sparkles className="size-3.5" /> Inteligência operacional para escritórios contábeis
+          </p>
+          <h1 className="mt-5 text-balance font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+            Sua contabilidade já sabe os números.{" "}
+            <span className="bg-linear-to-r from-brand to-accent bg-clip-text text-transparent">
+              A ContaAI mostra o que fazer com eles.
+            </span>
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
+            Rentabilidade real por cliente, oportunidades de receita que passam despercebidas, e um
+            Copilot que responde com os dados do seu próprio escritório — nunca inventa, sempre
+            explica, nunca age sem sua aprovação.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Button size="lg" onClick={onGetStarted}>
+              Criar meu workspace <ArrowRight className="size-4" />
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <a href="#contato">Falar com a gente</a>
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative mx-auto mt-16 max-w-5xl">
+          <div className="overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10">
+            <div className="flex items-center gap-1.5 border-b border-glass-line/60 bg-muted/40 px-4 py-2.5">
+              <span className="size-2.5 rounded-full bg-bad/60" />
+              <span className="size-2.5 rounded-full bg-warn/60" />
+              <span className="size-2.5 rounded-full bg-good/60" />
+            </div>
+            <img
+              src="/marketing/dashboard-preview.jpg"
+              alt="Visão Geral do ContaAI: receita, margem, clientes ativos e ações prioritárias do dia"
+              className="w-full"
+            />
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Features */}
+      <section id="recursos" className="mx-auto max-w-6xl px-6 py-20">
+        <SectionEyebrow>Recursos</SectionEyebrow>
+        <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+          O que já funciona de verdade
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
+          Sem promessa de "em breve" — cada item abaixo é código rodando, não protótipo.
+        </p>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div key={f.title} className="glass-panel rounded-2xl p-6">
               <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
@@ -224,7 +368,183 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </section>
 
-      <section id="contato" className="mx-auto max-w-2xl px-6 pb-24">
+      {/* Como funciona */}
+      <section id="como-funciona" className="bg-muted/30 px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <SectionEyebrow>Como funciona</SectionEyebrow>
+          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+            Do dado bruto à decisão aprovada
+          </h2>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {HOW_IT_WORKS.map((s) => (
+              <div key={s.step}>
+                <span className="grid size-9 place-items-center rounded-full bg-brand font-display text-sm font-semibold text-brand-foreground">
+                  {s.step}
+                </span>
+                <h3 className="mt-3 font-display text-base font-semibold">{s.title}</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Integrações */}
+      <section id="integracoes" className="mx-auto max-w-4xl px-6 py-20 text-center">
+        <SectionEyebrow>Integrações</SectionEyebrow>
+        <h2 className="mt-2 text-balance font-display text-3xl font-semibold">
+          Conectado com o que você já usa
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+          Status real de cada uma — sem maquiar o que ainda está em configuração.
+        </p>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          {INTEGRATIONS.map((i) => (
+            <div key={i.name} className="glass-panel flex items-center gap-3 rounded-2xl px-5 py-4">
+              <span className="grid size-10 place-items-center rounded-xl bg-muted">
+                <i.icon className="size-5 text-foreground" />
+              </span>
+              <div className="text-left">
+                <p className="text-sm font-semibold">{i.name}</p>
+                <span
+                  className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${INTEGRATION_BADGE[i.status]}`}
+                >
+                  {i.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Preços */}
+      <section id="precos" className="bg-muted/30 px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <SectionEyebrow>Preços</SectionEyebrow>
+          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+            Um plano pra cada fase do escritório
+          </h2>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+            {PLANS.map((plan) => (
+              <div
+                key={plan.name}
+                className={`relative rounded-2xl border p-7 ${
+                  plan.highlighted
+                    ? "border-brand bg-glass shadow-xl shadow-brand/10"
+                    : "glass-panel"
+                }`}
+              >
+                {plan.highlighted && (
+                  <span className="absolute -top-3 left-7 rounded-full bg-linear-to-r from-brand to-accent px-3 py-1 text-xs font-semibold text-brand-foreground">
+                    Mais popular
+                  </span>
+                )}
+                <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+                <p className="mt-4">
+                  <span className="font-display text-3xl font-semibold">{plan.price}</span>
+                  <span className="text-sm text-muted-foreground">{plan.period}</span>
+                </p>
+                <ul className="mt-5 space-y-2.5">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm">
+                      <Check className="mt-0.5 size-4 shrink-0 text-brand" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  className="mt-6 w-full"
+                  variant={plan.highlighted ? "default" : "outline"}
+                  onClick={onGetStarted}
+                >
+                  Começar com {plan.name}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-dashed border-glass-line p-5 text-center">
+            <p className="font-display text-base font-semibold">Personalizado</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Mais de um workspace, onboarding assistido ou um volume de clientes fora dos planos
+              acima? Fala com a gente.
+            </p>
+            <Button variant="outline" className="mt-3" asChild>
+              <a href="#contato">Falar com a gente</a>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-3xl px-6 py-20">
+        <SectionEyebrow>FAQ</SectionEyebrow>
+        <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+          Perguntas frequentes
+        </h2>
+        <div className="mt-10 space-y-5">
+          {[
+            {
+              q: "Preciso trocar de sistema contábil pra usar a ContaAI?",
+              a: "Não. A ContaAI organiza clientes, tarefas, documentos e a camada de inteligência comercial — não substitui o sistema de escrituração fiscal/contábil que você já usa.",
+            },
+            {
+              q: "A IA toma decisão sozinha no meu CRM ou cadastro?",
+              a: "Nunca. Toda recomendação da IA fica pendente de aprovação de um gestor antes de virar uma mudança real — isso vale pra oportunidade comercial, tarefa ou qualquer outra ação.",
+            },
+            {
+              q: "Funciona pra Simples Nacional, Lucro Presumido e Lucro Real?",
+              a: "Sim, o cadastro de clientes cobre os três regimes — a rentabilidade e as recomendações são calculadas a partir do que está registrado em cada cliente.",
+            },
+            {
+              q: "Meus dados ficam seguros?",
+              a: "Sim — cada escritório (workspace) só enxerga os próprios dados, com isolamento reforçado a nível de banco (Row Level Security), não só na tela.",
+            },
+          ].map((item) => (
+            <div key={item.q} className="glass-panel rounded-2xl p-5">
+              <p className="font-semibold">{item.q}</p>
+              <p className="mt-1.5 text-sm text-muted-foreground">{item.a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA escura */}
+      <section className="relative overflow-hidden bg-foreground px-6 py-20 text-background">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-brand/30 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-20 -left-20 size-80 rounded-full bg-accent/30 blur-3xl"
+        />
+        <div className="relative mx-auto max-w-3xl text-center">
+          <h2 className="text-balance font-display text-3xl font-semibold sm:text-4xl">
+            Pronto pra ver funcionando no seu escritório?
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-background/70">
+            Crie um workspace agora ou fale com a gente pra ver uma demonstração com os dados reais
+            da sua carteira.
+          </p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <Button size="lg" onClick={onGetStarted}>
+              Criar meu workspace <ArrowRight className="size-4" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-background/30 bg-transparent text-background hover:bg-background/10"
+              asChild
+            >
+              <a href="#contato">Falar com a gente</a>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Contato */}
+      <section id="contato" className="mx-auto max-w-2xl px-6 py-24">
         <div className="mb-6 text-center">
           <h2 className="font-display text-2xl font-semibold sm:text-3xl">
             Quer ver funcionando no seu escritório?
@@ -240,6 +560,16 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           formulário com seu WhatsApp que a gente chama por lá.
         </div>
       </section>
+
+      <footer className="border-t border-glass-line/60 px-6 py-8">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <ContaAILogo variant="horizontal" size={24} />
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} ContaAI. Inteligência operacional para escritórios
+            contábeis.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
