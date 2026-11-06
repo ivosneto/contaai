@@ -134,6 +134,7 @@ import {
 import { PortalStoreProvider } from "@/data/portal-store";
 import { SessionProvider, useSession } from "@/data/session";
 import { LoginPage } from "@/components/auth/login-page";
+import { LandingPage } from "@/components/marketing/landing-page";
 import { PendenciasPage } from "@/components/pendencias-page";
 import { CapacityPage } from "@/components/capacity-page";
 import { DocumentsPage } from "@/components/documents-page";
@@ -500,6 +501,7 @@ export function AccountingShell() {
 
 function AccountingShellGate() {
   const session = useSession();
+  const [showLogin, setShowLogin] = useState(false);
 
   if (session.status === "loading") {
     return (
@@ -511,7 +513,13 @@ function AccountingShellGate() {
       </div>
     );
   }
-  if (session.status === "signed-out") return <LoginPage />;
+  if (session.status === "signed-out") {
+    return showLogin ? (
+      <LoginPage onBack={() => setShowLogin(false)} />
+    ) : (
+      <LandingPage onGetStarted={() => setShowLogin(true)} />
+    );
+  }
   if (session.status === "no-workspace") {
     return (
       <div className="grid min-h-screen place-items-center bg-background px-6">
