@@ -5,6 +5,8 @@ import {
   BarChart3,
   Check,
   CheckCircle2,
+  ClipboardCheck,
+  Database,
   Inbox,
   Landmark,
   Mail,
@@ -127,22 +129,26 @@ const FEATURES = [
 const HOW_IT_WORKS = [
   {
     step: "1",
+    icon: Database,
     title: "Seus dados entram",
     description: "Clientes, tarefas, documentos e e-mail — o que já existe no seu escritório.",
   },
   {
     step: "2",
+    icon: Sparkles,
     title: "A IA cruza e detecta",
     description:
       "Revenue Intelligence e Rentabilidade Real encontram o que passaria despercebido numa planilha.",
   },
   {
     step: "3",
+    icon: ShieldCheck,
     title: "Você aprova",
     description: "Toda recomendação chega explicada — o gestor decide, nunca a IA sozinha.",
   },
   {
     step: "4",
+    icon: ClipboardCheck,
     title: "O resultado fica registrado",
     description:
       "Vira oportunidade no CRM, tarefa ou ação — com histórico, não só uma sugestão perdida.",
@@ -336,7 +342,13 @@ function SectionEyebrow({ children }: { children: string }) {
 
 export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-background">
+    <div
+      className="min-h-screen overflow-x-hidden bg-background"
+      style={{
+        backgroundImage: "radial-gradient(var(--glass-line) 1px, transparent 1px)",
+        backgroundSize: "28px 28px",
+      }}
+    >
       <header className="sticky top-0 z-20 border-b border-glass-line/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <ContaAILogo variant="horizontal" size={30} />
@@ -409,7 +421,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Features */}
-      <section id="recursos" className="mx-auto max-w-6xl px-6 py-20">
+      <section id="recursos" className="mx-auto max-w-6xl px-6 py-16">
         <Reveal>
           <SectionEyebrow>Recursos</SectionEyebrow>
           <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
@@ -435,22 +447,32 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Como funciona */}
-      <section id="como-funciona" className="bg-muted/30 px-6 py-20">
-        <div className="mx-auto max-w-5xl">
+      <section id="como-funciona" className="bg-muted/30 px-6 py-16">
+        <div className="mx-auto max-w-6xl">
           <Reveal>
             <SectionEyebrow>Como funciona</SectionEyebrow>
             <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
               Do dado bruto à decisão aprovada
             </h2>
           </Reveal>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {HOW_IT_WORKS.map((s, i) => (
-              <Reveal key={s.step} delayMs={i * 100}>
-                <span className="grid size-9 place-items-center rounded-full bg-brand font-display text-sm font-semibold text-brand-foreground">
-                  {s.step}
-                </span>
-                <h3 className="mt-3 font-display text-base font-semibold">{s.title}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
+              <Reveal key={s.step} delayMs={i * 100} className="relative">
+                <div className="glass-panel h-full rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
+                      <s.icon className="size-5" />
+                    </span>
+                    <span className="font-display text-sm font-semibold text-muted-foreground">
+                      Passo {s.step}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 font-display text-base font-semibold">{s.title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
+                </div>
+                {i < HOW_IT_WORKS.length - 1 && (
+                  <ArrowRight className="absolute -right-6 top-1/2 hidden size-5 -translate-y-1/2 text-brand/40 lg:block" />
+                )}
               </Reveal>
             ))}
           </div>
@@ -458,7 +480,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Integrações */}
-      <section id="integracoes" className="mx-auto max-w-4xl px-6 py-20 text-center">
+      <section id="integracoes" className="mx-auto max-w-4xl px-6 py-16 text-center">
         <Reveal>
           <SectionEyebrow>Integrações</SectionEyebrow>
           <h2 className="mt-2 text-balance font-display text-3xl font-semibold">
@@ -490,7 +512,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Preços */}
-      <section id="precos" className="bg-muted/30 px-6 py-20">
+      <section id="precos" className="bg-muted/30 px-6 py-16">
         <div className="mx-auto max-w-4xl">
           <Reveal>
             <SectionEyebrow>Preços</SectionEyebrow>
@@ -554,7 +576,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="mx-auto max-w-3xl px-6 py-20">
+      <section id="faq" className="mx-auto max-w-3xl px-6 py-16">
         <Reveal>
           <SectionEyebrow>FAQ</SectionEyebrow>
           <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
@@ -591,7 +613,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* CTA escura */}
-      <section className="relative overflow-hidden bg-foreground px-6 py-20 text-background">
+      <section className="relative overflow-hidden bg-foreground px-6 py-16 text-background">
         <div
           aria-hidden
           className="glow-orb pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-brand/30 blur-3xl motion-reduce:animate-none"
@@ -630,7 +652,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Contato */}
-      <section id="contato" className="mx-auto max-w-2xl px-6 py-24">
+      <section id="contato" className="mx-auto max-w-2xl px-6 py-16">
         <Reveal>
           <div className="mb-6 text-center">
             <h2 className="font-display text-2xl font-semibold sm:text-3xl">
