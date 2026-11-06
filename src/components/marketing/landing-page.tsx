@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
   Banknote,
   BarChart3,
+  Bell,
   Building2,
   Check,
   CheckCircle2,
-  ClipboardCheck,
-  Database,
   FileSpreadsheet,
   FolderOpen,
   Inbox,
@@ -20,72 +19,25 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
+  UserPlus,
   Users,
   Wallet,
 } from "lucide-react";
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { ContaAILogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { submitLeadFn } from "@/data/server-functions/marketing";
-
-/**
- * Revela o conteúdo com um fade+slide sutil quando entra na viewport —
- * nunca parte de opacity:0 esperando um observer que pode não disparar
- * (conteúdo já intersectando no mount revela quase imediatamente, já que
- * IntersectionObserver.observe() dispara o callback de imediato nesse
- * caso). Respeita prefers-reduced-motion: nesse caso já nasce visível,
- * sem transição.
- */
-function Reveal({
-  children,
-  delayMs = 0,
-  className,
-}: {
-  children: ReactNode;
-  delayMs?: number;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    setReduceMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.15 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      style={reduceMotion ? undefined : { transitionDelay: `${delayMs}ms` }}
-      className={cn(
-        reduceMotion
-          ? "opacity-100"
-          : cn(
-              "transition-all duration-700 ease-out",
-              visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
-            ),
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
+import { CopilotDemo } from "@/components/marketing/copilot-demo";
+import {
+  AnimatedNumber,
+  LineReveal,
+  Reveal,
+  TiltCard,
+} from "@/components/marketing/motion-primitives";
+import { ScrollStory } from "@/components/marketing/scroll-story";
 
 const NAV_LINKS = [
   { href: "#recursos", label: "Recursos" },
@@ -134,35 +86,6 @@ const FEATURES = [
   },
 ] as const;
 
-const HOW_IT_WORKS = [
-  {
-    step: "1",
-    icon: Database,
-    title: "Seus dados entram",
-    description: "Clientes, tarefas, documentos e e-mail — o que já existe no seu escritório.",
-  },
-  {
-    step: "2",
-    icon: Sparkles,
-    title: "A IA cruza e detecta",
-    description:
-      "Revenue Intelligence e Rentabilidade Real encontram o que passaria despercebido numa planilha.",
-  },
-  {
-    step: "3",
-    icon: ShieldCheck,
-    title: "Você aprova",
-    description: "Toda recomendação chega explicada — o gestor decide, nunca a IA sozinha.",
-  },
-  {
-    step: "4",
-    icon: ClipboardCheck,
-    title: "O resultado fica registrado",
-    description:
-      "Vira oportunidade no CRM, tarefa ou ação — com histórico, não só uma sugestão perdida.",
-  },
-] as const;
-
 /**
  * Mesmo catálogo e vocabulário de status usado dentro do produto
  * (Configurações → ver src/integrations/providers/catalog.ts) — nunca
@@ -201,7 +124,7 @@ const INTEGRATION_BADGE: Record<(typeof INTEGRATIONS)[number]["status"], string>
 const PLANS = [
   {
     name: "Essencial",
-    price: "R$ 297",
+    price: 297,
     period: "/mês",
     description: "Pra escritórios que querem organizar a operação num só lugar.",
     features: [
@@ -215,7 +138,7 @@ const PLANS = [
   },
   {
     name: "Inteligência",
-    price: "R$ 697",
+    price: 697,
     period: "/mês",
     description: "Tudo do Essencial, mais a camada de inteligência comercial.",
     features: [
@@ -362,10 +285,108 @@ function SectionEyebrow({ children }: { children: string }) {
   );
 }
 
+const HERO_NOTIFICATIONS = [
+  { icon: UserPlus, label: "Novo cliente identificado", style: { top: "6%", left: "-8%" } },
+  { icon: TrendingUp, label: "Oportunidade detectada", style: { top: "18%", right: "-10%" } },
+  { icon: Bell, label: "Pendência resolvida", style: { bottom: "10%", left: "-6%" } },
+] as const;
+
+/** Mockup do hero: parallax leve acompanhando o mouse + notificações flutuantes ao redor do dashboard real. */
+function HeroMockup() {
+  const reduce = useReducedMotion();
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const rotateX = useSpring(useTransform(py, [-0.5, 0.5], [6, -6]), {
+    stiffness: 120,
+    damping: 20,
+  });
+  const rotateY = useSpring(useTransform(px, [-0.5, 0.5], [-6, 6]), {
+    stiffness: 120,
+    damping: 20,
+  });
+  const translateX = useSpring(useTransform(px, [-0.5, 0.5], [-10, 10]), {
+    stiffness: 120,
+    damping: 20,
+  });
+  const translateY = useSpring(useTransform(py, [-0.5, 0.5], [-10, 10]), {
+    stiffness: 120,
+    damping: 20,
+  });
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (reduce || e.pointerType === "touch") return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    px.set((e.clientX - rect.left) / rect.width - 0.5);
+    py.set((e.clientY - rect.top) / rect.height - 0.5);
+  };
+  const onPointerLeave = () => {
+    px.set(0);
+    py.set(0);
+  };
+
+  return (
+    <Reveal delayMs={150} className="relative mx-auto mt-16 max-w-5xl">
+      <div
+        onPointerMove={onPointerMove}
+        onPointerLeave={onPointerLeave}
+        style={{ perspective: 1200 }}
+        className="relative"
+      >
+        <motion.div
+          style={{ rotateX, rotateY }}
+          className="animate-[floaty_7s_ease-in-out_infinite] overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10 motion-reduce:animate-none"
+        >
+          <div className="flex items-center gap-1.5 border-b border-glass-line/60 bg-muted/40 px-4 py-2.5">
+            <span className="size-2.5 rounded-full bg-bad/60" />
+            <span className="size-2.5 rounded-full bg-warn/60" />
+            <span className="size-2.5 rounded-full bg-good/60" />
+          </div>
+          <img
+            src="/marketing/dashboard-preview.jpg"
+            alt="Visão Geral do ContaAI: receita, margem, clientes ativos e ações prioritárias do dia"
+            className="w-full"
+          />
+        </motion.div>
+
+        {HERO_NOTIFICATIONS.map((n, i) => (
+          // Duas camadas: a externa só aplica o parallax do mouse (x/y vêm
+          // da spring compartilhada); a interna faz a flutuação própria em
+          // loop — um motion.div só não dá pra animar duas origens de "y"
+          // ao mesmo tempo (style vs. animate) sem conflito.
+          <motion.div
+            key={n.label}
+            aria-hidden
+            style={{ ...n.style, x: reduce ? 0 : translateX, y: reduce ? 0 : translateY }}
+            className="absolute hidden sm:block"
+          >
+            <motion.div
+              className="glass-panel flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium shadow-xl"
+              initial={reduce ? false : { opacity: 0, scale: 0.8 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: reduce ? 0 : [0, -8, 0],
+              }}
+              transition={{
+                opacity: { delay: 0.6 + i * 0.2, duration: 0.5 },
+                scale: { delay: 0.6 + i * 0.2, duration: 0.5 },
+                y: { duration: 4 + i, repeat: Infinity, ease: "easeInOut", delay: i * 0.6 },
+              }}
+            >
+              <n.icon className="size-3.5 text-brand" />
+              {n.label}
+            </motion.div>
+          </motion.div>
+        ))}
+      </div>
+    </Reveal>
+  );
+}
+
 export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   return (
     <div
-      className="min-h-screen overflow-x-hidden bg-background"
+      className="min-h-screen bg-background"
       style={{
         backgroundImage: "radial-gradient(var(--glass-line) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
@@ -391,55 +412,68 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
+      {/* Hero — overflow-hidden fica escopado aqui (não no wrapper da página
+          inteira), pra não quebrar position:sticky do header e da seção de
+          scroll storytelling mais abaixo: um ancestral com overflow
+          restrito (mesmo só no eixo X) muda o "containing block" de
+          qualquer elemento sticky dentro dele. */}
+      <section className="relative overflow-hidden px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
         <div
           aria-hidden
           className="glow-orb pointer-events-none absolute left-1/2 top-0 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/15 via-accent/10 to-transparent blur-3xl motion-reduce:animate-none"
         />
         <div className="relative mx-auto max-w-3xl text-center">
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand">
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand"
+          >
             <Sparkles className="size-3.5" /> Inteligência operacional para escritórios contábeis
-          </p>
+          </motion.p>
           <h1 className="mt-5 text-balance font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-            Sua contabilidade já sabe os números.{" "}
-            <span className="bg-linear-to-r from-brand to-accent bg-clip-text text-transparent">
-              A ContaAI mostra o que fazer com eles.
-            </span>
+            <LineReveal
+              lines={[
+                "Sua contabilidade já sabe os números.",
+                <span
+                  key="gradient"
+                  className="bg-linear-to-r from-brand to-accent bg-clip-text text-transparent"
+                >
+                  A ContaAI mostra o que fazer com eles.
+                </span>,
+              ]}
+            />
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.45 }}
+            className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground"
+          >
             Rentabilidade real por cliente, oportunidades de receita que passam despercebidas, e um
             Copilot que responde com os dados do seu próprio escritório — nunca inventa, sempre
             explica, nunca age sem sua aprovação.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          >
             <Button
               size="lg"
-              className="transition-transform hover:scale-[1.03]"
+              className="transition-transform hover:scale-[1.03] active:scale-[0.97]"
               onClick={onGetStarted}
             >
               Criar meu workspace <ArrowRight className="size-4" />
             </Button>
-            <Button size="lg" variant="outline" asChild>
+            <Button size="lg" variant="outline" className="active:scale-[0.97]" asChild>
               <a href="#contato">Falar com a gente</a>
             </Button>
-          </div>
+          </motion.div>
         </div>
 
-        <Reveal delayMs={150} className="relative mx-auto mt-16 max-w-5xl">
-          <div className="animate-[floaty_7s_ease-in-out_infinite] overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10 motion-reduce:animate-none">
-            <div className="flex items-center gap-1.5 border-b border-glass-line/60 bg-muted/40 px-4 py-2.5">
-              <span className="size-2.5 rounded-full bg-bad/60" />
-              <span className="size-2.5 rounded-full bg-warn/60" />
-              <span className="size-2.5 rounded-full bg-good/60" />
-            </div>
-            <img
-              src="/marketing/dashboard-preview.jpg"
-              alt="Visão Geral do ContaAI: receita, margem, clientes ativos e ações prioritárias do dia"
-              className="w-full"
-            />
-          </div>
-        </Reveal>
+        <HeroMockup />
       </section>
 
       {/* Features */}
@@ -456,50 +490,23 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delayMs={i * 80}>
-              <div className="glass-panel h-full rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
+              <TiltCard className="glass-panel h-full rounded-2xl p-6">
                 <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
                   <f.icon className="size-5" />
                 </span>
                 <h3 className="mt-4 font-display text-lg font-semibold">{f.title}</h3>
                 <p className="mt-1.5 text-sm text-muted-foreground">{f.description}</p>
-              </div>
+              </TiltCard>
             </Reveal>
           ))}
         </div>
       </section>
 
-      {/* Como funciona */}
-      <section id="como-funciona" className="bg-muted/30 px-6 py-16">
-        <div className="mx-auto max-w-6xl">
-          <Reveal>
-            <SectionEyebrow>Como funciona</SectionEyebrow>
-            <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
-              Do dado bruto à decisão aprovada
-            </h2>
-          </Reveal>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {HOW_IT_WORKS.map((s, i) => (
-              <Reveal key={s.step} delayMs={i * 100} className="relative">
-                <div className="glass-panel h-full rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
-                      <s.icon className="size-5" />
-                    </span>
-                    <span className="font-display text-sm font-semibold text-muted-foreground">
-                      Passo {s.step}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-display text-base font-semibold">{s.title}</h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
-                </div>
-                {i < HOW_IT_WORKS.length - 1 && (
-                  <ArrowRight className="absolute -right-6 top-1/2 hidden size-5 -translate-y-1/2 text-brand/40 lg:block" />
-                )}
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Como funciona — scroll storytelling (pin + crossfade por progresso de scroll) */}
+      <ScrollStory />
+
+      {/* Copilot — demonstração roteirizada */}
+      <CopilotDemo />
 
       {/* Integrações */}
       <section id="integracoes" className="mx-auto max-w-6xl px-6 py-16 text-center">
@@ -544,8 +551,8 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <div className="mt-10 grid gap-6 sm:grid-cols-2">
             {PLANS.map((plan, i) => (
               <Reveal key={plan.name} delayMs={i * 120}>
-                <div
-                  className={`relative rounded-2xl border p-7 transition-transform duration-300 hover:-translate-y-1 ${
+                <TiltCard
+                  className={`relative rounded-2xl border p-7 ${
                     plan.highlighted
                       ? "border-brand bg-glass shadow-xl shadow-brand/10"
                       : "glass-panel"
@@ -559,7 +566,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                   <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
                   <p className="mt-4">
-                    <span className="font-display text-3xl font-semibold">{plan.price}</span>
+                    <AnimatedNumber
+                      value={plan.price}
+                      prefix="R$ "
+                      className="font-display text-3xl font-semibold"
+                    />
                     <span className="text-sm text-muted-foreground">{plan.period}</span>
                   </p>
                   <ul className="mt-5 space-y-2.5">
@@ -577,7 +588,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                   >
                     Começar com {plan.name}
                   </Button>
-                </div>
+                </TiltCard>
               </Reveal>
             ))}
           </div>
