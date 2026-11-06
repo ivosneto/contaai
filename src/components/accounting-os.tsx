@@ -308,7 +308,7 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        {eyebrow && <p className="font-serif text-lg italic text-brand">{eyebrow}</p>}
+        {eyebrow && <p className="text-sm font-medium text-muted-foreground">{eyebrow}</p>}
         <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
       </div>
@@ -821,21 +821,13 @@ function Dashboard({ openAI }: { openAI: () => void }) {
           </Button>
         }
       />
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-3">
         <Kpi
           label="Receita mensal"
           value={brl(latestRevenue)}
           change={`${revenueChangePct >= 0 ? "▲" : "▼"} ${Math.abs(revenueChangePct)}% vs. mês anterior`}
           tone={revenueChangePct >= 0 ? "good" : "bad"}
           icon={TrendingUp}
-          onClick={() => void navigate({ to: "/financeiro" })}
-        />
-        <Kpi
-          label="MRR"
-          value={brl(totals.mrr)}
-          change={`${mrrWaterfall.netChange >= 0 ? "▲" : "▼"} ${brl(Math.abs(mrrWaterfall.netChange))} no mês`}
-          tone={mrrWaterfall.netChange >= 0 ? "good" : "bad"}
-          icon={CircleDollarSign}
           onClick={() => void navigate({ to: "/financeiro" })}
         />
         <Kpi
@@ -856,21 +848,6 @@ function Dashboard({ openAI }: { openAI: () => void }) {
           }
           icon={Users}
           onClick={() => void navigate({ to: "/clientes" })}
-        />
-        <Kpi
-          label="Churn 90d"
-          value={String(totals.atRisk)}
-          change="clientes em risco"
-          tone="warn"
-          icon={TrendingDown}
-          onClick={() => void navigate({ to: "/clientes", search: { filtro: "risco" } as never })}
-        />
-        <Kpi
-          label="NPS"
-          value={String(totals.nps)}
-          change="média da carteira"
-          tone="warn"
-          icon={HeartPulse}
         />
         <Kpi
           label="Tarefas atrasadas"
@@ -961,39 +938,44 @@ function Dashboard({ openAI }: { openAI: () => void }) {
           </Glass>
         </section>
       )}
-      <section className="mt-4 grid gap-4 xl:grid-cols-5">
-        <Glass className="p-5 xl:col-span-3">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold">3 problemas críticos</h2>
-            <Badge tone="bad">Crítico</Badge>
-          </div>
-          <div className="space-y-2.5">
-            {critical.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => void navigate({ to: a.link as "/pessoas" })}
-                className="glass-soft flex w-full items-start gap-3 rounded-xl p-3 text-left hover:border-bad/40"
-              >
-                <StatusDot tone="bad" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{a.title}</p>
-                  <p className="text-xs text-muted-foreground">{a.detail}</p>
-                </div>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              </button>
-            ))}
-          </div>
-        </Glass>
-        <Glass className="p-5 xl:col-span-2">
-          <div className="mb-3 flex items-center gap-2">
+      <section className="mt-4">
+        <Glass className="p-5">
+          <div className="mb-1 flex items-center gap-2">
             <span className="grid size-7 place-items-center rounded-lg bg-linear-to-br from-brand to-accent text-brand-foreground">
               <Sparkles className="size-4" />
             </span>
             <h2 className="font-display text-lg font-semibold">O que fazer hoje</h2>
+            <Badge tone="neutral">{critical.length + priorities.length}</Badge>
           </div>
           <p className="mb-3 text-xs text-muted-foreground">
             Priorizado pelo motor de inteligência com base nos dados da operação.
           </p>
+          {critical.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-bad">
+                Crítico agora
+              </p>
+              {critical.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => void navigate({ to: a.link as "/pessoas" })}
+                  className="glass-soft flex w-full items-start gap-3 rounded-xl p-3 text-left hover:border-bad/40"
+                >
+                  <StatusDot tone="bad" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <p className="text-xs text-muted-foreground">{a.detail}</p>
+                  </div>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          )}
+          {priorities.length > 0 && (
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Recomendado
+            </p>
+          )}
           <div className="space-y-2">
             {priorities.map((ins, i) => {
               const status = insightStatus[ins.id];
@@ -1128,58 +1110,25 @@ function Dashboard({ openAI }: { openAI: () => void }) {
           </div>
         </Glass>
       </section>
-      <Glass className="mt-4 p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-semibold">
-            Rentabilidade da carteira — custo operacional real
-          </h2>
-          <Link to="/rentabilidade" className="text-xs font-semibold text-brand">
-            Ver motor de rentabilidade →
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="glass-soft rounded-xl p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Margem média</p>
-            <p className="font-display text-xl font-semibold">
-              {profitabilityDashboard.avgMargin}%
-            </p>
-          </div>
-          <div className="glass-soft rounded-xl p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Receita</p>
-            <p className="font-display text-xl font-semibold">
-              {brl(profitabilityDashboard.totalRevenue)}
-            </p>
-          </div>
-          <div className="glass-soft rounded-xl p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Custo real</p>
-            <p className="font-display text-xl font-semibold">
-              {brl(profitabilityDashboard.totalCost)}
-            </p>
-          </div>
-          <div className="glass-soft rounded-xl p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Lucro</p>
-            <p
-              className={cn(
-                "font-display text-xl font-semibold",
-                profitabilityDashboard.totalProfit < 0 && "text-bad",
-              )}
-            >
-              {brl(profitabilityDashboard.totalProfit)}
-            </p>
-          </div>
-        </div>
-        {profitabilityDashboard.deficitClients.length > 0 && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            {profitabilityDashboard.deficitClients.length} cliente(s) operando com prejuízo:{" "}
+      {profitabilityDashboard.deficitClients.length > 0 && (
+        <Glass className="mt-4 p-4">
+          <p className="text-xs text-muted-foreground">
+            <strong className="font-semibold text-bad">
+              {profitabilityDashboard.deficitClients.length} cliente(s)
+            </strong>{" "}
+            operando com prejuízo:{" "}
             {profitabilityDashboard.deficitClients
               .slice(0, 4)
               .map((d) => clientById(d.clientId)?.name)
               .filter(Boolean)
               .join(", ")}
-            .
+            .{" "}
+            <Link to="/rentabilidade" className="font-semibold text-brand">
+              Ver motor de rentabilidade →
+            </Link>
           </p>
-        )}
-      </Glass>
+        </Glass>
+      )}
       {topChurnRisks.length > 0 && (
         <Glass className="mt-4 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
