@@ -2,18 +2,26 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
+  Banknote,
   BarChart3,
+  Building2,
   Check,
   CheckCircle2,
   ClipboardCheck,
   Database,
+  FileSpreadsheet,
+  FolderOpen,
   Inbox,
+  Kanban,
   Landmark,
   Mail,
+  MessageCircle,
   MessageSquareText,
   ShieldCheck,
   Sparkles,
   Target,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { ContaAILogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
@@ -156,19 +164,33 @@ const HOW_IT_WORKS = [
 ] as const;
 
 /**
- * Status honesto por integração — mesmo vocabulário usado dentro do
- * produto (Configurações): nunca "disponível" quando ainda não está
- * conectado de verdade. Ver src/integrations/providers/catalog.ts.
+ * Mesmo catálogo e vocabulário de status usado dentro do produto
+ * (Configurações → ver src/integrations/providers/catalog.ts) — nunca
+ * "disponível" quando ainda não está conectado de verdade. Gestta foi
+ * deliberadamente deixado de fora: investigação própria não achou nenhum
+ * caminho técnico (nem API, nem parceiro), então "planejado" seria
+ * otimista demais pra uma página pública.
  */
 const INTEGRATIONS = [
   { icon: Mail, name: "Gmail", status: "Real" as const },
   { icon: Landmark, name: "Alterdata", status: "Em configuração" as const },
   { icon: Landmark, name: "Sittax", status: "Em configuração" as const },
+  { icon: MessageCircle, name: "WhatsApp Business", status: "Demo" as const },
+  { icon: FolderOpen, name: "Google Drive", status: "Demo" as const },
+  { icon: FileSpreadsheet, name: "Excel / Google Sheets", status: "Planejado" as const },
+  { icon: Kanban, name: "Trello", status: "Planejado" as const },
+  { icon: Users, name: "CRM externo", status: "Planejado" as const },
+  { icon: Wallet, name: "ERP financeiro", status: "Planejado" as const },
+  { icon: Banknote, name: "Open Finance", status: "Planejado" as const },
+  { icon: Building2, name: "eSocial", status: "Planejado" as const },
+  { icon: Building2, name: "SPED", status: "Planejado" as const },
 ];
 
 const INTEGRATION_BADGE: Record<(typeof INTEGRATIONS)[number]["status"], string> = {
   Real: "bg-good/10 text-good",
   "Em configuração": "bg-warn/10 text-warn",
+  Demo: "bg-accent/10 text-accent",
+  Planejado: "bg-muted-foreground/10 text-muted-foreground",
 };
 
 /**
@@ -480,31 +502,30 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       </section>
 
       {/* Integrações */}
-      <section id="integracoes" className="mx-auto max-w-4xl px-6 py-16 text-center">
+      <section id="integracoes" className="mx-auto max-w-6xl px-6 py-16 text-center">
         <Reveal>
           <SectionEyebrow>Integrações</SectionEyebrow>
           <h2 className="mt-2 text-balance font-display text-3xl font-semibold">
             Conectado com o que você já usa
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Status real de cada uma — sem maquiar o que ainda está em configuração.
+            Status real de cada uma — Real é código testado contra o sistema de verdade; Demo é uma
+            simulação interativa; Planejado é catálogo, não promessa de prazo.
           </p>
         </Reveal>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {INTEGRATIONS.map((i, idx) => (
-            <Reveal key={i.name} delayMs={idx * 100}>
-              <div className="glass-panel flex items-center gap-3 rounded-2xl px-5 py-4 transition-transform duration-300 hover:-translate-y-1">
+            <Reveal key={i.name} delayMs={(idx % 4) * 90}>
+              <div className="glass-panel flex h-full flex-col items-center gap-2 rounded-2xl px-4 py-5 text-center transition-transform duration-300 hover:-translate-y-1">
                 <span className="grid size-10 place-items-center rounded-xl bg-muted">
                   <i.icon className="size-5 text-foreground" />
                 </span>
-                <div className="text-left">
-                  <p className="text-sm font-semibold">{i.name}</p>
-                  <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${INTEGRATION_BADGE[i.status]}`}
-                  >
-                    {i.status}
-                  </span>
-                </div>
+                <p className="text-sm font-semibold">{i.name}</p>
+                <span
+                  className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${INTEGRATION_BADGE[i.status]}`}
+                >
+                  {i.status}
+                </span>
               </div>
             </Reveal>
           ))}
