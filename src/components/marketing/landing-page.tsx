@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -17,7 +17,65 @@ import { ContaAILogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { submitLeadFn } from "@/data/server-functions/marketing";
+
+/**
+ * Revela o conteúdo com um fade+slide sutil quando entra na viewport —
+ * nunca parte de opacity:0 esperando um observer que pode não disparar
+ * (conteúdo já intersectando no mount revela quase imediatamente, já que
+ * IntersectionObserver.observe() dispara o callback de imediato nesse
+ * caso). Respeita prefers-reduced-motion: nesse caso já nasce visível,
+ * sem transição.
+ */
+function Reveal({
+  children,
+  delayMs = 0,
+  className,
+}: {
+  children: ReactNode;
+  delayMs?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    setReduceMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      style={reduceMotion ? undefined : { transitionDelay: `${delayMs}ms` }}
+      className={cn(
+        reduceMotion
+          ? "opacity-100"
+          : cn(
+              "transition-all duration-700 ease-out",
+              visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
+            ),
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 const NAV_LINKS = [
   { href: "#recursos", label: "Recursos" },
@@ -303,7 +361,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       <section className="relative px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/15 via-accent/10 to-transparent blur-3xl"
+          className="glow-orb pointer-events-none absolute left-1/2 top-0 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/15 via-accent/10 to-transparent blur-3xl motion-reduce:animate-none"
         />
         <div className="relative mx-auto max-w-3xl text-center">
           <p className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand">
@@ -321,7 +379,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             explica, nunca age sem sua aprovação.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Button size="lg" onClick={onGetStarted}>
+            <Button
+              size="lg"
+              className="transition-transform hover:scale-[1.03]"
+              onClick={onGetStarted}
+            >
               Criar meu workspace <ArrowRight className="size-4" />
             </Button>
             <Button size="lg" variant="outline" asChild>
@@ -330,8 +392,8 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           </div>
         </div>
 
-        <div className="relative mx-auto mt-16 max-w-5xl">
-          <div className="overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10">
+        <Reveal delayMs={150} className="relative mx-auto mt-16 max-w-5xl">
+          <div className="animate-[floaty_7s_ease-in-out_infinite] overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10 motion-reduce:animate-none">
             <div className="flex items-center gap-1.5 border-b border-glass-line/60 bg-muted/40 px-4 py-2.5">
               <span className="size-2.5 rounded-full bg-bad/60" />
               <span className="size-2.5 rounded-full bg-warn/60" />
@@ -343,27 +405,31 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               className="w-full"
             />
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Features */}
       <section id="recursos" className="mx-auto max-w-6xl px-6 py-20">
-        <SectionEyebrow>Recursos</SectionEyebrow>
-        <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
-          O que já funciona de verdade
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
-          Sem promessa de "em breve" — cada item abaixo é código rodando, não protótipo.
-        </p>
+        <Reveal>
+          <SectionEyebrow>Recursos</SectionEyebrow>
+          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+            O que já funciona de verdade
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
+            Sem promessa de "em breve" — cada item abaixo é código rodando, não protótipo.
+          </p>
+        </Reveal>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="glass-panel rounded-2xl p-6">
-              <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
-                <f.icon className="size-5" />
-              </span>
-              <h3 className="mt-4 font-display text-lg font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">{f.description}</p>
-            </div>
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delayMs={i * 80}>
+              <div className="glass-panel h-full rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
+                <span className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-brand-foreground">
+                  <f.icon className="size-5" />
+                </span>
+                <h3 className="mt-4 font-display text-lg font-semibold">{f.title}</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">{f.description}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -371,19 +437,21 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       {/* Como funciona */}
       <section id="como-funciona" className="bg-muted/30 px-6 py-20">
         <div className="mx-auto max-w-5xl">
-          <SectionEyebrow>Como funciona</SectionEyebrow>
-          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
-            Do dado bruto à decisão aprovada
-          </h2>
+          <Reveal>
+            <SectionEyebrow>Como funciona</SectionEyebrow>
+            <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+              Do dado bruto à decisão aprovada
+            </h2>
+          </Reveal>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.step}>
+            {HOW_IT_WORKS.map((s, i) => (
+              <Reveal key={s.step} delayMs={i * 100}>
                 <span className="grid size-9 place-items-center rounded-full bg-brand font-display text-sm font-semibold text-brand-foreground">
                   {s.step}
                 </span>
                 <h3 className="mt-3 font-display text-base font-semibold">{s.title}</h3>
                 <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -391,28 +459,32 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
 
       {/* Integrações */}
       <section id="integracoes" className="mx-auto max-w-4xl px-6 py-20 text-center">
-        <SectionEyebrow>Integrações</SectionEyebrow>
-        <h2 className="mt-2 text-balance font-display text-3xl font-semibold">
-          Conectado com o que você já usa
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          Status real de cada uma — sem maquiar o que ainda está em configuração.
-        </p>
+        <Reveal>
+          <SectionEyebrow>Integrações</SectionEyebrow>
+          <h2 className="mt-2 text-balance font-display text-3xl font-semibold">
+            Conectado com o que você já usa
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Status real de cada uma — sem maquiar o que ainda está em configuração.
+          </p>
+        </Reveal>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          {INTEGRATIONS.map((i) => (
-            <div key={i.name} className="glass-panel flex items-center gap-3 rounded-2xl px-5 py-4">
-              <span className="grid size-10 place-items-center rounded-xl bg-muted">
-                <i.icon className="size-5 text-foreground" />
-              </span>
-              <div className="text-left">
-                <p className="text-sm font-semibold">{i.name}</p>
-                <span
-                  className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${INTEGRATION_BADGE[i.status]}`}
-                >
-                  {i.status}
+          {INTEGRATIONS.map((i, idx) => (
+            <Reveal key={i.name} delayMs={idx * 100}>
+              <div className="glass-panel flex items-center gap-3 rounded-2xl px-5 py-4 transition-transform duration-300 hover:-translate-y-1">
+                <span className="grid size-10 place-items-center rounded-xl bg-muted">
+                  <i.icon className="size-5 text-foreground" />
                 </span>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">{i.name}</p>
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${INTEGRATION_BADGE[i.status]}`}
+                  >
+                    {i.status}
+                  </span>
+                </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -420,68 +492,75 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       {/* Preços */}
       <section id="precos" className="bg-muted/30 px-6 py-20">
         <div className="mx-auto max-w-4xl">
-          <SectionEyebrow>Preços</SectionEyebrow>
-          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
-            Um plano pra cada fase do escritório
-          </h2>
+          <Reveal>
+            <SectionEyebrow>Preços</SectionEyebrow>
+            <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+              Um plano pra cada fase do escritório
+            </h2>
+          </Reveal>
           <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative rounded-2xl border p-7 ${
-                  plan.highlighted
-                    ? "border-brand bg-glass shadow-xl shadow-brand/10"
-                    : "glass-panel"
-                }`}
-              >
-                {plan.highlighted && (
-                  <span className="absolute -top-3 left-7 rounded-full bg-linear-to-r from-brand to-accent px-3 py-1 text-xs font-semibold text-brand-foreground">
-                    Mais popular
-                  </span>
-                )}
-                <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-                <p className="mt-4">
-                  <span className="font-display text-3xl font-semibold">{plan.price}</span>
-                  <span className="text-sm text-muted-foreground">{plan.period}</span>
-                </p>
-                <ul className="mt-5 space-y-2.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <Check className="mt-0.5 size-4 shrink-0 text-brand" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="mt-6 w-full"
-                  variant={plan.highlighted ? "default" : "outline"}
-                  onClick={onGetStarted}
+            {PLANS.map((plan, i) => (
+              <Reveal key={plan.name} delayMs={i * 120}>
+                <div
+                  className={`relative rounded-2xl border p-7 transition-transform duration-300 hover:-translate-y-1 ${
+                    plan.highlighted
+                      ? "border-brand bg-glass shadow-xl shadow-brand/10"
+                      : "glass-panel"
+                  }`}
                 >
-                  Começar com {plan.name}
-                </Button>
-              </div>
+                  {plan.highlighted && (
+                    <span className="absolute -top-3 left-7 rounded-full bg-linear-to-r from-brand to-accent px-3 py-1 text-xs font-semibold text-brand-foreground">
+                      Mais popular
+                    </span>
+                  )}
+                  <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+                  <p className="mt-4">
+                    <span className="font-display text-3xl font-semibold">{plan.price}</span>
+                    <span className="text-sm text-muted-foreground">{plan.period}</span>
+                  </p>
+                  <ul className="mt-5 space-y-2.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm">
+                        <Check className="mt-0.5 size-4 shrink-0 text-brand" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    className="mt-6 w-full"
+                    variant={plan.highlighted ? "default" : "outline"}
+                    onClick={onGetStarted}
+                  >
+                    Começar com {plan.name}
+                  </Button>
+                </div>
+              </Reveal>
             ))}
           </div>
-          <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-dashed border-glass-line p-5 text-center">
-            <p className="font-display text-base font-semibold">Personalizado</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Mais de um workspace, onboarding assistido ou um volume de clientes fora dos planos
-              acima? Fala com a gente.
-            </p>
-            <Button variant="outline" className="mt-3" asChild>
-              <a href="#contato">Falar com a gente</a>
-            </Button>
-          </div>
+          <Reveal delayMs={240}>
+            <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-dashed border-glass-line p-5 text-center">
+              <p className="font-display text-base font-semibold">Personalizado</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Mais de um workspace, onboarding assistido ou um volume de clientes fora dos planos
+                acima? Fala com a gente.
+              </p>
+              <Button variant="outline" className="mt-3" asChild>
+                <a href="#contato">Falar com a gente</a>
+              </Button>
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* FAQ */}
       <section id="faq" className="mx-auto max-w-3xl px-6 py-20">
-        <SectionEyebrow>FAQ</SectionEyebrow>
-        <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
-          Perguntas frequentes
-        </h2>
+        <Reveal>
+          <SectionEyebrow>FAQ</SectionEyebrow>
+          <h2 className="mt-2 text-balance text-center font-display text-3xl font-semibold">
+            Perguntas frequentes
+          </h2>
+        </Reveal>
         <div className="mt-10 space-y-5">
           {[
             {
@@ -500,11 +579,13 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               q: "Meus dados ficam seguros?",
               a: "Sim — cada escritório (workspace) só enxerga os próprios dados, com isolamento reforçado a nível de banco (Row Level Security), não só na tela.",
             },
-          ].map((item) => (
-            <div key={item.q} className="glass-panel rounded-2xl p-5">
-              <p className="font-semibold">{item.q}</p>
-              <p className="mt-1.5 text-sm text-muted-foreground">{item.a}</p>
-            </div>
+          ].map((item, i) => (
+            <Reveal key={item.q} delayMs={i * 80}>
+              <div className="glass-panel rounded-2xl p-5">
+                <p className="font-semibold">{item.q}</p>
+                <p className="mt-1.5 text-sm text-muted-foreground">{item.a}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -513,13 +594,14 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       <section className="relative overflow-hidden bg-foreground px-6 py-20 text-background">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-brand/30 blur-3xl"
+          className="glow-orb pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-brand/30 blur-3xl motion-reduce:animate-none"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -bottom-20 -left-20 size-80 rounded-full bg-accent/30 blur-3xl"
+          style={{ animationDelay: "2.5s" }}
+          className="glow-orb pointer-events-none absolute -bottom-20 -left-20 size-80 rounded-full bg-accent/30 blur-3xl motion-reduce:animate-none"
         />
-        <div className="relative mx-auto max-w-3xl text-center">
+        <Reveal className="relative mx-auto max-w-3xl text-center">
           <h2 className="text-balance font-display text-3xl font-semibold sm:text-4xl">
             Pronto pra ver funcionando no seu escritório?
           </h2>
@@ -528,7 +610,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             da sua carteira.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Button size="lg" onClick={onGetStarted}>
+            <Button
+              size="lg"
+              className="transition-transform hover:scale-[1.03]"
+              onClick={onGetStarted}
+            >
               Criar meu workspace <ArrowRight className="size-4" />
             </Button>
             <Button
@@ -540,25 +626,27 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               <a href="#contato">Falar com a gente</a>
             </Button>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Contato */}
       <section id="contato" className="mx-auto max-w-2xl px-6 py-24">
-        <div className="mb-6 text-center">
-          <h2 className="font-display text-2xl font-semibold sm:text-3xl">
-            Quer ver funcionando no seu escritório?
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Deixe seu contato — a gente responde e combina uma demonstração com os seus próprios
-            dados.
-          </p>
-        </div>
-        <ContactForm />
-        <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <MessageSquareText className="size-3.5" /> Prefere conversar direto? Responda este
-          formulário com seu WhatsApp que a gente chama por lá.
-        </div>
+        <Reveal>
+          <div className="mb-6 text-center">
+            <h2 className="font-display text-2xl font-semibold sm:text-3xl">
+              Quer ver funcionando no seu escritório?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Deixe seu contato — a gente responde e combina uma demonstração com os seus próprios
+              dados.
+            </p>
+          </div>
+          <ContactForm />
+          <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <MessageSquareText className="size-3.5" /> Prefere conversar direto? Responda este
+            formulário com seu WhatsApp que a gente chama por lá.
+          </div>
+        </Reveal>
       </section>
 
       <footer className="border-t border-glass-line/60 px-6 py-8">
