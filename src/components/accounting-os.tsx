@@ -30,6 +30,8 @@ import {
   Search,
   Settings,
   Sparkles,
+  Sun,
+  Moon,
   Target,
   TrendingDown,
   TrendingUp,
@@ -124,6 +126,7 @@ import {
   type ServiceName,
 } from "@/data/office";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/theme";
 import {
   OfficeStoreProvider,
   useOfficeStore,
@@ -607,6 +610,7 @@ function Topbar({
   onAI: () => void;
   onMenu: () => void;
 }) {
+  const { theme, toggle: toggleTheme } = useTheme();
   return (
     <header className="mb-5 flex items-center gap-2 sm:gap-3">
       <Button
@@ -639,6 +643,15 @@ function Topbar({
             3
           </span>
         </Link>
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        className="glass-soft rounded-xl"
+        onClick={toggleTheme}
+        aria-label={theme === "dark" ? "Mudar para modo claro" : "Mudar para modo escuro"}
+      >
+        {theme === "dark" ? <Sun /> : <Moon />}
       </Button>
       <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br from-brand to-accent text-sm font-semibold text-brand-foreground">
         M

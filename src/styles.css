@@ -120,6 +120,13 @@
   --sidebar-accent-foreground: oklch(0.28 0.04 265);
   --sidebar-border: oklch(1 0 0 / 60%);
   --sidebar-ring: oklch(0.585 0.203 277.1);
+
+  --body-gradient: linear-gradient(
+    158deg,
+    oklch(0.95 0.03 277) 0%,
+    oklch(0.975 0.008 275) 42%,
+    oklch(0.955 0.03 205) 100%
+  );
 }
 
 @layer base {
@@ -128,8 +135,7 @@
   }
 
   body {
-    background:
-      linear-gradient(158deg, oklch(0.95 0.03 277) 0%, oklch(0.975 0.008 275) 42%, oklch(0.955 0.03 205) 100%);
+    background: var(--body-gradient);
     background-attachment: fixed;
     color: var(--color-foreground);
     font-family: var(--font-sans);
@@ -146,7 +152,7 @@
 
 @utility glass-soft {
   border: 1px solid var(--glass-line);
-  background: oklch(1 0 0 / 60%);
+  background: var(--glass);
 }
 
 @keyframes floaty {
@@ -171,4 +177,118 @@
 
 @utility glow-orb {
   animation: pulse-glow 7s ease-in-out infinite;
+}
+
+/*
+ * Dark mode — `.dark` é a preferência do usuário no painel autenticado
+ * (ver src/lib/theme.ts: toggle na Topbar, persistida em localStorage,
+ * aplicada antes do primeiro paint via script em __root.tsx).
+ * `.marketing-theme` é o site comercial (src/components/marketing/*),
+ * que SEMPRE usa esse mesmo navy/violeta/ciano, pré-login, independente
+ * da preferência salva — por isso os dois dividem os mesmos valores.
+ * Mesmos tokens semânticos do resto do app (é o mesmo sistema "Frosted
+ * Glass", só invertido), então todo componente que já usa
+ * var(--brand)/bg-muted/glass-panel/etc. funciona sem nenhuma classe
+ * especial, claro ou escuro.
+ */
+.dark,
+.marketing-theme {
+  color-scheme: dark;
+
+  --background: oklch(0.17 0.035 266);
+  --foreground: oklch(0.95 0.012 250);
+  --ink: oklch(0.95 0.012 250);
+
+  --card: oklch(0.23 0.045 266 / 65%);
+  --card-foreground: oklch(0.95 0.012 250);
+  --popover: oklch(0.2 0.04 266);
+  --popover-foreground: oklch(0.95 0.012 250);
+
+  --primary: oklch(0.95 0.012 250);
+  --primary-foreground: oklch(0.17 0.035 266);
+
+  --brand: oklch(0.635 0.225 296);
+  --brand-foreground: oklch(0.99 0.004 250);
+
+  --accent: oklch(0.78 0.145 200);
+  --accent-foreground: oklch(0.15 0.03 250);
+
+  --secondary: oklch(0.26 0.04 266);
+  --secondary-foreground: oklch(0.93 0.012 250);
+
+  --muted: oklch(0.245 0.038 266);
+  --muted-foreground: oklch(0.645 0.025 255);
+
+  --good: oklch(0.74 0.16 162);
+  --warn: oklch(0.8 0.165 80);
+  --bad: oklch(0.7 0.2 25);
+  --destructive: oklch(0.7 0.2 25);
+  --destructive-foreground: oklch(0.99 0.004 250);
+
+  --border: oklch(1 0 0 / 14%);
+  --glass: oklch(1 0 0 / 6%);
+  --glass-line: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.635 0.225 296);
+
+  --chart-1: oklch(0.635 0.225 296);
+  --chart-2: oklch(0.78 0.145 200);
+  --chart-3: oklch(0.74 0.16 162);
+  --chart-4: oklch(0.8 0.165 80);
+  --chart-5: oklch(0.7 0.2 25);
+
+  --sidebar: oklch(0.2 0.04 266);
+  --sidebar-foreground: oklch(0.95 0.012 250);
+  --sidebar-primary: oklch(0.635 0.225 296);
+  --sidebar-primary-foreground: oklch(0.99 0.004 250);
+  --sidebar-accent: oklch(0.26 0.04 266);
+  --sidebar-accent-foreground: oklch(0.93 0.012 250);
+  --sidebar-border: oklch(1 0 0 / 14%);
+  --sidebar-ring: oklch(0.635 0.225 296);
+
+  /*
+   * Os cards "de vidro" (glass-panel/glass-soft) são translúcidos de
+   * propósito — sem um --body-gradient escuro aqui, eles deixariam o
+   * fundo claro do :root vazar por trás mesmo com `.dark` ativo.
+   */
+  --body-gradient: linear-gradient(
+    158deg,
+    oklch(0.2 0.05 290) 0%,
+    oklch(0.17 0.035 266) 45%,
+    oklch(0.19 0.045 240) 100%
+  );
+}
+
+@keyframes orbit-distance {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes orbit-distance-reverse {
+  from {
+    offset-distance: 100%;
+  }
+  to {
+    offset-distance: 0%;
+  }
+}
+
+@keyframes beam-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scaleY(1.06);
+  }
+}
+
+@utility beam-glow {
+  animation: beam-pulse 5s ease-in-out infinite;
 }

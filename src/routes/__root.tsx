@@ -105,10 +105,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/**
+ * Script bloqueante (roda antes do primeiro paint) só pra decidir a classe
+ * `dark` do <html> a partir da preferência salva (ver src/lib/theme.ts) ou,
+ * na ausência dela, do prefers-color-scheme do SO — sem isso o painel
+ * nasceria sempre claro e trocaria pra escuro só depois do React hidratar
+ * (flash visível). `suppressHydrationWarning` no <html> é necessário porque
+ * essa classe é adicionada fora do controle do React, antes da hidratação.
+ */
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("contaai-theme");if(!t){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}if(t==="dark"){document.documentElement.classList.add("dark");}}catch(e){}})();`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>

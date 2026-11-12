@@ -16,6 +16,7 @@ import {
   Mail,
   MessageCircle,
   MessageSquareText,
+  Plug,
   ShieldCheck,
   Sparkles,
   Target,
@@ -23,6 +24,7 @@ import {
   UserPlus,
   Users,
   Wallet,
+  Zap,
 } from "lucide-react";
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { ContaAILogo } from "@/components/brand/logo";
@@ -34,17 +36,42 @@ import { CopilotDemo } from "@/components/marketing/copilot-demo";
 import {
   AnimatedNumber,
   LineReveal,
+  OrbitBadge,
   Reveal,
   TiltCard,
 } from "@/components/marketing/motion-primitives";
 import { ScrollStory } from "@/components/marketing/scroll-story";
 
 const NAV_LINKS = [
-  { href: "#recursos", label: "Recursos" },
   { href: "#como-funciona", label: "Como funciona" },
+  { href: "#recursos", label: "Recursos" },
   { href: "#integracoes", label: "Integrações" },
   { href: "#precos", label: "Preços" },
   { href: "#faq", label: "FAQ" },
+] as const;
+
+/** Linha de confiança logo abaixo dos CTAs do hero — mesmas quatro frentes do produto, nunca uma promessa nova. */
+const TRUST_STRIP = [
+  {
+    icon: Zap,
+    title: "Automação inteligente",
+    description: "Documentos, obrigações e pendências organizados sem digitação manual.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Segurança por workspace",
+    description: "Isolamento reforçado a nível de banco (RLS) entre escritórios.",
+  },
+  {
+    icon: BarChart3,
+    title: "Rentabilidade real",
+    description: "Custo operacional cruzado com o honorário, cliente a cliente.",
+  },
+  {
+    icon: Plug,
+    title: "Integrações nativas",
+    description: "Gmail conectado de verdade; Alterdata e Sittax em configuração.",
+  },
 ] as const;
 
 const FEATURES = [
@@ -291,6 +318,29 @@ const HERO_NOTIFICATIONS = [
   { icon: Bell, label: "Pendência resolvida", style: { bottom: "10%", left: "-6%" } },
 ] as const;
 
+/**
+ * Emblema decorativo do "motor de IA": núcleo pulsante com três ícones
+ * revolucionando em órbita (CSS motion path, ver OrbitBadge). Fica fora do
+ * card do dashboard de propósito — nunca sobre o screenshot real, pra não
+ * atrapalhar a leitura dele.
+ */
+function AICoreEmblem() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute -right-8 -top-12 hidden size-40 sm:block lg:-right-20 lg:-top-16"
+    >
+      <div className="glow-orb absolute inset-[30%] rounded-full bg-linear-to-br from-brand to-accent blur-md motion-reduce:animate-none" />
+      <div className="absolute inset-[36%] grid place-items-center rounded-full bg-linear-to-br from-brand to-accent shadow-lg shadow-brand/40">
+        <Sparkles className="size-4 text-brand-foreground" />
+      </div>
+      <OrbitBadge icon={Zap} radius={66} offsetPercent={0} durationS={18} />
+      <OrbitBadge icon={ShieldCheck} radius={66} offsetPercent={33} durationS={18} />
+      <OrbitBadge icon={BarChart3} radius={66} offsetPercent={66} durationS={18} />
+    </div>
+  );
+}
+
 /** Mockup do hero: parallax leve acompanhando o mouse + notificações flutuantes ao redor do dashboard real. */
 function HeroMockup() {
   const reduce = useReducedMotion();
@@ -327,14 +377,19 @@ function HeroMockup() {
   return (
     <Reveal delayMs={150} className="relative mx-auto mt-16 max-w-5xl">
       <div
+        aria-hidden
+        className="beam-glow pointer-events-none absolute left-1/2 top-[-120px] -z-10 h-[360px] w-px -translate-x-1/2 bg-linear-to-b from-accent/90 via-brand/50 to-transparent motion-reduce:animate-none"
+      />
+      <div
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
         style={{ perspective: 1200 }}
         className="relative"
       >
+        <AICoreEmblem />
         <motion.div
           style={{ rotateX, rotateY }}
-          className="animate-[floaty_7s_ease-in-out_infinite] overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/10 motion-reduce:animate-none"
+          className="animate-[floaty_7s_ease-in-out_infinite] overflow-hidden rounded-2xl border border-glass-line bg-glass shadow-2xl shadow-brand/20 motion-reduce:animate-none"
         >
           <div className="flex items-center gap-1.5 border-b border-glass-line/60 bg-muted/40 px-4 py-2.5">
             <span className="size-2.5 rounded-full bg-bad/60" />
@@ -386,7 +441,7 @@ function HeroMockup() {
 export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   return (
     <div
-      className="min-h-screen bg-background"
+      className="marketing-theme min-h-screen bg-background text-foreground"
       style={{
         backgroundImage: "radial-gradient(var(--glass-line) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
@@ -406,9 +461,16 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               </a>
             ))}
           </nav>
-          <Button variant="outline" onClick={onGetStarted}>
-            Entrar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onGetStarted}>
+              Entrar
+            </Button>
+            <Button className="hidden sm:inline-flex" asChild>
+              <a href="#contato">
+                Solicitar demonstração <ArrowRight className="size-4" />
+              </a>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -420,14 +482,14 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       <section className="relative overflow-hidden px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
         <div
           aria-hidden
-          className="glow-orb pointer-events-none absolute left-1/2 top-0 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/15 via-accent/10 to-transparent blur-3xl motion-reduce:animate-none"
+          className="glow-orb pointer-events-none absolute left-1/2 top-0 h-[560px] w-[1000px] -translate-x-1/2 rounded-full bg-linear-to-br from-brand/35 via-accent/20 to-transparent blur-3xl motion-reduce:animate-none"
         />
         <div className="relative mx-auto max-w-3xl text-center">
           <motion.p
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand"
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand"
           >
             <Sparkles className="size-3.5" /> Inteligência operacional para escritórios contábeis
           </motion.p>
@@ -473,8 +535,29 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           </motion.div>
         </div>
 
+        <Reveal
+          delayMs={420}
+          className="relative mx-auto mt-14 grid max-w-4xl grid-cols-2 gap-x-6 gap-y-8 border-t border-glass-line/60 pt-8 sm:grid-cols-4"
+        >
+          {TRUST_STRIP.map((t) => (
+            <div
+              key={t.title}
+              className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left"
+            >
+              <span className="grid size-9 place-items-center rounded-lg bg-brand/10 text-brand">
+                <t.icon className="size-4.5" />
+              </span>
+              <p className="text-sm font-semibold">{t.title}</p>
+              <p className="text-xs text-muted-foreground">{t.description}</p>
+            </div>
+          ))}
+        </Reveal>
+
         <HeroMockup />
       </section>
+
+      {/* Como funciona — scroll storytelling (pin + crossfade por progresso de scroll) */}
+      <ScrollStory />
 
       {/* Features */}
       <section id="recursos" className="mx-auto max-w-6xl px-6 py-16">
@@ -501,9 +584,6 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           ))}
         </div>
       </section>
-
-      {/* Como funciona — scroll storytelling (pin + crossfade por progresso de scroll) */}
-      <ScrollStory />
 
       {/* Copilot — demonstração roteirizada */}
       <CopilotDemo />
@@ -644,43 +724,48 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </section>
 
-      {/* CTA escura */}
-      <section className="relative overflow-hidden bg-foreground px-6 py-16 text-background">
-        <div
-          aria-hidden
-          className="glow-orb pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-brand/30 blur-3xl motion-reduce:animate-none"
-        />
-        <div
-          aria-hidden
-          style={{ animationDelay: "2.5s" }}
-          className="glow-orb pointer-events-none absolute -bottom-20 -left-20 size-80 rounded-full bg-accent/30 blur-3xl motion-reduce:animate-none"
-        />
-        <Reveal className="relative mx-auto max-w-3xl text-center">
-          <h2 className="text-balance font-display text-3xl font-semibold sm:text-4xl">
-            Pronto pra ver funcionando no seu escritório?
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-background/70">
-            Crie um workspace agora ou fale com a gente pra ver uma demonstração com os dados reais
-            da sua carteira.
-          </p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Button
-              size="lg"
-              className="transition-transform hover:scale-[1.03]"
-              onClick={onGetStarted}
-            >
-              Criar meu workspace <ArrowRight className="size-4" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-background/30 bg-transparent text-background hover:bg-background/10"
-              asChild
-            >
-              <a href="#contato">Falar com a gente</a>
-            </Button>
-          </div>
-        </Reveal>
+      {/* CTA final — painel em gradiente vívido (brand → accent), o momento
+          mais saturado da página de propósito: tudo em volta é navy
+          contido, esse bloco é onde a página "sobe o tom" antes de pedir
+          a conversão. */}
+      <section className="px-6 py-20">
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-[2.5rem] bg-linear-to-br from-brand via-brand to-accent px-6 py-16 text-center shadow-2xl shadow-brand/30 sm:px-12">
+          <div
+            aria-hidden
+            className="glow-orb pointer-events-none absolute -right-16 -top-16 size-72 rounded-full bg-white/25 blur-3xl motion-reduce:animate-none"
+          />
+          <div
+            aria-hidden
+            style={{ animationDelay: "2.5s" }}
+            className="glow-orb pointer-events-none absolute -bottom-20 -left-16 size-72 rounded-full bg-background/40 blur-3xl motion-reduce:animate-none"
+          />
+          <Reveal className="relative">
+            <h2 className="text-balance font-display text-3xl font-semibold text-brand-foreground sm:text-4xl">
+              Pronto pra ver funcionando no seu escritório?
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-brand-foreground/80">
+              Crie um workspace agora ou fale com a gente pra ver uma demonstração com os dados
+              reais da sua carteira.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                size="lg"
+                className="bg-background text-foreground shadow-lg transition-transform hover:scale-[1.03] hover:bg-background/90"
+                onClick={onGetStarted}
+              >
+                Criar meu workspace <ArrowRight className="size-4" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-brand-foreground/30 bg-transparent text-brand-foreground hover:bg-brand-foreground/10"
+                asChild
+              >
+                <a href="#contato">Falar com a gente</a>
+              </Button>
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       {/* Contato */}

@@ -3,7 +3,7 @@
 // seção inventar o próprio ritmo. Usa a biblioteca "motion" (sucessora
 // do framer-motion, mesmo time) — única lib de animação do projeto, ver
 // package.json.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   animate,
   motion,
@@ -14,6 +14,7 @@ import {
   useTransform,
   type Variants,
 } from "motion/react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const revealVariants: Variants = {
@@ -134,6 +135,59 @@ export function AnimatedNumber({
  * baixo pra dentro de uma máscara — cada item de `lines` é uma linha.
  * O <span> externo só recorta (overflow hidden), quem anima é o interno.
  */
+/**
+ * Ícone que percorre uma órbita circular em loop infinito, via CSS Motion
+ * Path (`offset-path`/`offset-distance`) — não gira o ícone junto (`offset-
+ * rotate: 0deg`), então ele sempre fica "de pé" enquanto revoluciona.
+ * `offsetPercent` escolhe o ponto de partida na órbita (0–100) e vira um
+ * atraso NEGATIVO de animação, pra várias órbitas no mesmo raio nunca
+ * saírem alinhadas. Sem prefers-reduced-motion, ancora num ponto fixo da
+ * órbita em vez de animar.
+ */
+export function OrbitBadge({
+  icon: Icon,
+  radius,
+  durationS = 26,
+  offsetPercent = 0,
+  reverse = false,
+  className,
+}: {
+  icon: LucideIcon;
+  radius: number;
+  durationS?: number;
+  offsetPercent?: number;
+  reverse?: boolean;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  const style: CSSProperties = reduce
+    ? {
+        transform: `translate(${Math.cos((offsetPercent / 100) * 2 * Math.PI) * radius}px, ${Math.sin((offsetPercent / 100) * 2 * Math.PI) * radius}px)`,
+      }
+    : {
+        offsetPath: `circle(${radius}px at 50% 50%)`,
+        offsetRotate: "0deg",
+        offsetDistance: `${offsetPercent}%`,
+        animationName: reverse ? "orbit-distance-reverse" : "orbit-distance",
+        animationDuration: `${durationS}s`,
+        animationTimingFunction: "linear",
+        animationIterationCount: "infinite",
+        animationDelay: `${-(offsetPercent / 100) * durationS}s`,
+      };
+
+  return (
+    <div
+      aria-hidden
+      className={cn("absolute left-1/2 top-1/2 -ml-[22px] -mt-[22px] size-11", className)}
+      style={style}
+    >
+      <div className="glass-panel grid size-11 place-items-center rounded-2xl text-brand shadow-lg">
+        <Icon className="size-5" />
+      </div>
+    </div>
+  );
+}
+
 export function LineReveal({ lines, className }: { lines: ReactNode[]; className?: string }) {
   const reduce = useReducedMotion();
   return (
